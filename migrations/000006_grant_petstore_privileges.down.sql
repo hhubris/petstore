@@ -1,0 +1,5 @@
+REVOKE SELECT, INSERT, UPDATE, DELETE
+    ON pets, users FROM petstore;
+
+REVOKE USAGE, SELECT
+    ON ALL SEQUENCES IN SCHEMA public FROM petstore;

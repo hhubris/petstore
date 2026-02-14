@@ -1,0 +1,5 @@
+GRANT SELECT, INSERT, UPDATE, DELETE
+    ON pets, users TO petstore;
+
+GRANT USAGE, SELECT
+    ON ALL SEQUENCES IN SCHEMA public TO petstore;
