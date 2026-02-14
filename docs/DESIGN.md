@@ -268,14 +268,24 @@ CREATE TABLE pets (
 CREATE TABLE users (
     id            BIGSERIAL    PRIMARY KEY,
     name          TEXT         NOT NULL,
-    email         TEXT         NOT NULL UNIQUE,
+    email         TEXT         NOT NULL,
     password_hash TEXT         NOT NULL,
     role          TEXT         NOT NULL DEFAULT 'customer'
                   CHECK (role IN ('admin', 'customer')),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX idx_users_email ON users (email);
 ```
+
+### Indexes
+
+| Index            | Table | Columns | Type   | Purpose              |
+|------------------|-------|---------|--------|----------------------|
+| `pets_pkey`      | pets  | id      | PK     | Primary key (auto)   |
+| `idx_pets_tag`   | pets  | tag     | B-tree | Tag filter queries   |
+| `users_pkey`     | users | id      | PK     | Primary key (auto)   |
+| `idx_users_email`| users | email   | Unique | Login lookup, dedup  |
 
 ### Privilege Grants
 
@@ -299,11 +309,20 @@ administrative tasks.
 - Files live in `migrations/`, numbered sequentially with
   separate up/down files:
   ```
-  000001_create_pets_table.up.sql
-  000001_create_pets_table.down.sql
-  000002_create_users_table.up.sql
-  000002_create_users_table.down.sql
+  000001_create_petstore_role.up.sql / .down.sql
+  000002_create_pets_table.up.sql    / .down.sql
+  000003_create_pets_indexes.up.sql  / .down.sql
+  000004_create_users_table.up.sql   / .down.sql
+  000005_create_users_indexes.up.sql / .down.sql
+  000006_grant_petstore_privileges.up.sql / .down.sql
   ```
+- Each table creation and its indexes are in separate
+  migrations.
+- Migration 000001 creates the `petstore` role using
+  `current_setting('migration.petstore_password')`. The
+  Go migration runner must `SET` this session variable
+  from the `PETSTORE_PASSWORD` env var before running
+  migrations.
 - **Dev:** Migrations run automatically on server startup.
 - **Prod:** Migrations run explicitly via CLI before deploy.
 - Down migrations exist for every up migration to support

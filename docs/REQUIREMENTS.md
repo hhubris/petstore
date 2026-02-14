@@ -271,11 +271,12 @@ migrations/
 - Passwords stored in encrypted mise config
   (never in plaintext or version control)
 - Tables:
-  - **pets:** `id` (serial primary key),
-    `name` (text, not null), `tag` (text, nullable)
+  - **pets:** `id` (bigserial primary key),
+    `name` (text, not null), `tag` (text, nullable,
+    indexed)
   - **users:** `id` (bigserial primary key),
     `name` (text, not null),
-    `email` (text, not null, unique),
+    `email` (text, not null, unique index),
     `password_hash` (text, not null),
     `role` (text, not null, default 'customer',
     check in ('admin', 'customer')),
@@ -284,14 +285,22 @@ migrations/
 
 ### Migrations
 
-- SQL migration files live in `migrations/` and are numbered
-  sequentially (e.g., `001_create_users_table.sql`)
-- Migrations are applied using `golang-migrate/migrate` with
-  the PostgreSQL driver
-- Each migration file contains both `up` and `down` sections
-  (or separate `.up.sql` / `.down.sql` files)
-- Migrations run automatically on server startup in dev, and
-  explicitly via CLI in production
+- SQL migration files live in `migrations/` with separate
+  `.up.sql` / `.down.sql` files, numbered sequentially
+- Applied using `golang-migrate/migrate` with the
+  PostgreSQL driver
+- Table creation and index creation are kept in separate
+  migrations
+- Migration order:
+  1. Create `petstore` role (password from env var via
+     session variable)
+  2. Create `pets` table
+  3. Create `pets` indexes (`idx_pets_tag`)
+  4. Create `users` table
+  5. Create `users` indexes (`idx_users_email` unique)
+  6. Grant privileges to `petstore` role
+- Migrations run automatically on server startup in dev,
+  and explicitly via CLI in production
 
 ## Environment Variables
 
