@@ -299,6 +299,11 @@ migrations/
   4. Create `users` table
   5. Create `users` indexes (`idx_users_email` unique)
   6. Grant privileges to `petstore` role
+- A migration runner script (`scripts/migrate.sh`) wraps
+  `golang-migrate` to inject the `petstore_password`
+  session variable required by migration 000001
+- The PostgreSQL container uses a named Docker volume
+  (`petstore-data`) for data persistence across restarts
 - Migrations run automatically on server startup in dev,
   and explicitly via CLI in production
 

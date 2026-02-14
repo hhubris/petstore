@@ -6,13 +6,34 @@ description = "Generate server and client code from OpenAPI spec"
 run = "cd {{config_root}} && go generate ./internal/api/..."
 
 [tasks.db]
-description = "Run PostgreSQL in a Docker container"
+description = "Start database and run migrations"
+depends = ["db:start", "db:migrate"]
+
+[tasks."db:start"]
+description = "Start PostgreSQL container with persistent volume"
 run = """
 docker run --name petstore-db \
   -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  -v petstore-data:/var/lib/postgresql \
   -p 5432:5432 \
   -d docker.io/library/postgres:latest
 """
+
+[tasks."db:stop"]
+description = "Stop and remove the PostgreSQL container"
+run = "docker rm -f petstore-db"
+
+[tasks."db:clean"]
+description = "Stop container and remove persistent volume"
+run = """
+docker rm -f petstore-db 2>/dev/null || true
+docker volume rm petstore-data 2>/dev/null || true
+"""
+
+[tasks."db:migrate"]
+description = "Run database migrations"
+depends = ["db:start"]
+run = "{{config_root}}/scripts/migrate.sh"
 
 [env]
 POSTGRES_PASSWORD = { age = "YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSA0RXRPdnhMbFhUeXFtR2V0OGtEd2FEdVkvN0RWTlJPaVJQVitodWhoQndNCmRwWnpBNWhkSFdrMEQ1V0JsYmhEeFRVdHBiOS9vbGlHVE1IYmh4U0JEOHMKLT4gc3NoLWVkMjU1MTkgaXJaYm9RIGdyQ0QzdHcxNWhPVEhoVkQyanovWFd3UzU2cUdxdEhJem9GSGVhY3pFbGsKb3lmczNUQVR4U1EyTHp5dzBjWGtlenFUZEhIc080cUhySC9Sa2gxREZHUQotPiBiJC1ncmVhc2UgbmI9SXQKL25RYUJBQ2MrSGRZQnBjdEdiNmc1aEZodXVCa1o0SUhnc2QxSExKc3RsY2hUb0hWUTduSUpCLytIUGhVaEpYcAorb1k3QlUweTBnZG9aTzdQMnZRdm1leUdqcXFyS282R1hya09NUmJFY2R6K1F3Ci0tLSBHNytwNHhxN2l4dWZWVTYxYkhzaHJxMjdsZ3JGbW8zbzVEOW1ualdBUWVzCiRJVO/foXh2ls+i5UQWtwrwPile2JZ5opP8vpwt6Q3bZIXiivfRmO+i1a0s2LUxLNIEWw" }

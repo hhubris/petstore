@@ -78,6 +78,8 @@ internal/
   pet/
     service.go           # PetService (CRUD logic)
     repository.go        # PetRepository (DB queries)
+scripts/
+  migrate.sh               # Migration runner (sets session vars)
 migrations/
   000001_create_pets_table.up.sql
   000001_create_pets_table.down.sql
@@ -327,6 +329,32 @@ administrative tasks.
 - **Prod:** Migrations run explicitly via CLI before deploy.
 - Down migrations exist for every up migration to support
   rollback.
+- The `scripts/migrate.sh` wrapper builds a `DATABASE_URL`
+  with the `options` parameter to `SET`
+  `migration.petstore_password` as a session variable, then
+  invokes `migrate up`. It allows `DATABASE_URL` override
+  from the environment.
+
+### Docker Volume
+
+The PostgreSQL container uses a named Docker volume
+(`petstore-data`) mounted at `/var/lib/postgresql` to
+persist data across container restarts. This means
+`db:stop` followed by `db:start` retains all data.
+`db:clean` explicitly removes the volume for a fresh start.
+
+### Database Lifecycle Tasks
+
+mise provides a set of tasks for managing the database
+container:
+
+| Task         | Description                              |
+|--------------|------------------------------------------|
+| `db`         | Start database and run migrations        |
+| `db:start`   | Start container with persistent volume   |
+| `db:stop`    | Stop and remove the container            |
+| `db:clean`   | Stop container and remove the volume     |
+| `db:migrate` | Run migrations via `scripts/migrate.sh`  |
 
 ### Connection Management
 
