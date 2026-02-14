@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "==> go fmt"
+gofmt_output=$(gofmt -l .)
+if [ -n "$gofmt_output" ]; then
+  echo "Files not formatted:"
+  echo "$gofmt_output"
+  exit 1
+fi
+
+echo "==> go:lint"
+mise run go:lint
+
+echo "==> go build"
+go build ./...
+
+echo "==> go test"
+go test ./...
+
+echo "All pre-commit checks passed."

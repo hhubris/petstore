@@ -1,5 +1,6 @@
 [tools]
 go = "latest"
+"golangci-lint" = "latest"
 
 [tasks.generate]
 description = "Generate server and client code from OpenAPI spec"
@@ -38,3 +39,11 @@ run = "{{config_root}}/scripts/migrate.sh"
 [env]
 POSTGRES_PASSWORD = { age = "YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSA0RXRPdnhMbFhUeXFtR2V0OGtEd2FEdVkvN0RWTlJPaVJQVitodWhoQndNCmRwWnpBNWhkSFdrMEQ1V0JsYmhEeFRVdHBiOS9vbGlHVE1IYmh4U0JEOHMKLT4gc3NoLWVkMjU1MTkgaXJaYm9RIGdyQ0QzdHcxNWhPVEhoVkQyanovWFd3UzU2cUdxdEhJem9GSGVhY3pFbGsKb3lmczNUQVR4U1EyTHp5dzBjWGtlenFUZEhIc080cUhySC9Sa2gxREZHUQotPiBiJC1ncmVhc2UgbmI9SXQKL25RYUJBQ2MrSGRZQnBjdEdiNmc1aEZodXVCa1o0SUhnc2QxSExKc3RsY2hUb0hWUTduSUpCLytIUGhVaEpYcAorb1k3QlUweTBnZG9aTzdQMnZRdm1leUdqcXFyS282R1hya09NUmJFY2R6K1F3Ci0tLSBHNytwNHhxN2l4dWZWVTYxYkhzaHJxMjdsZ3JGbW8zbzVEOW1ualdBUWVzCiRJVO/foXh2ls+i5UQWtwrwPile2JZ5opP8vpwt6Q3bZIXiivfRmO+i1a0s2LUxLNIEWw" }
 PETSTORE_PASSWORD = { age = "YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBjKzNSQWhwYndKVTltUWtLeGpjZFlhaDNQcXU1bmxuZFgrSG5uOFExcjM0CnhvUERDUUJ0ZDVoNlZySHpBc05WTGFGbnROMXlYb215RG10Wi9Udis3SVUKLT4gc3NoLWVkMjU1MTkgaXJaYm9RIGtqb3V5OUZWaGV3S1VjaXh6MnpvWGlrSE9ZWmJ6YU44cGEyWUNFbWdKVXcKd1ZpajhMMS9PUUtaZTZEK2ZEYzF0cWZERklvWjVJWHh6OUVZYmFCVllHcwotPiBxLWdyZWFzZSA/ZS5sTycgSjMoCkVIZWg4VWUvUlVncndxR1lZM1Jza09ROEN6STFwZ0hnUXRETTdwcVMKLS0tIGk4a3AxQ3RaaFFaY3FRc0tvMVNQOWdwZjNKWnJ0ak1xTFpJcCt1TGNFTFkKrLDa9M8VtpTnyPH2qanoJIAxPqaX5zjfBA6KpDLByNcxuHvsPqARtJ5xYfqikQdEUPly" }
+
+[tasks."go:lint"]
+description = "Run golangci-lint on Go source"
+run = "golangci-lint run ./..."
+
+[tasks.lint]
+description = "Run all linters"
+depends = ["go:lint"]
