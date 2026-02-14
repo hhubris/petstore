@@ -4,3 +4,12 @@ go = "latest"
 [tasks.generate]
 description = "Generate server and client code from OpenAPI spec"
 run = "cd {{config_root}} && go generate ./internal/api/..."
+
+[tasks.db]
+description = "Run PostgreSQL in a Docker container"
+run = """
+docker run --name petstore-db \
+  -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  -p 5432:5432 \
+  -d postgres:latest
+"""
