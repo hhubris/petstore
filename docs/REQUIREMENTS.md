@@ -10,6 +10,8 @@ following 12-Factor App principles.
 
 - **Backend:** Go standard library, API generated with
   [ogen](https://ogen.dev/) from OpenAPI 3.0 spec
+- **Go Client:** Generated Go HTTP client (ogen) from the
+  same OpenAPI spec; CLI entrypoint in `cmd/client/`
 - **Frontend:** React + TypeScript, Vite, Tailwind CSS
 - **Database:** PostgreSQL
 - **Tooling:** mise (task runner, software management,
@@ -18,8 +20,8 @@ following 12-Factor App principles.
 ## API Specification
 
 The API is defined in `internal/api/api.yml` (OpenAPI 3.0) and
-serves as the single source of truth. Server code is generated
-using ogen.
+serves as the single source of truth. Both server and client
+code are generated using ogen from this spec.
 
 ### Operations
 
@@ -235,6 +237,30 @@ migrations/
 - API calls go through a service layer
   (`frontend/src/services/`)
 
+## Go Client Requirements
+
+- Generated from the same `internal/api/api.yml` spec as
+  the server using ogen
+- Client code lives in the `client/` package at the
+  project root
+- CLI entrypoint in `cmd/client/main.go`
+- Supports all API operations (pets CRUD, auth endpoints)
+- Handles cookie-based authentication via ogen's
+  `SecuritySource` interface
+- Code generation via `mise run generate`
+  (runs `go generate ./internal/api/...`)
+
+### Code Generation
+
+- Two ogen config files control generation:
+  - `internal/api/ogen-server.yml` — server code →
+    `internal/api/`
+  - `internal/api/ogen-client.yml` — client code →
+    `client/`
+- Generation directives live in
+  `internal/api/generate.go`
+- Generated `oas_*.go` files must not be edited manually
+
 ## Database Requirements
 
 - PostgreSQL with two database users:
@@ -287,6 +313,13 @@ migrations/
 - Dev/prod parity — containerization-ready
 - API spec (`api.yml`) is the single source of truth;
   code is generated, not hand-written
+
+### Documentation
+
+- All feature changes must update `docs/REQUIREMENTS.md`
+- All implementation changes must update `docs/DESIGN.md`
+- API changes require updating `internal/api/api.yml`
+  before implementation
 
 ### Security
 

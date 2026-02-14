@@ -11,8 +11,12 @@ A pet store application with a Go backend API and a React frontend.
 
 ## Project Structure
 ```
-/cmd/           # Go entrypoints (e.g., cmd/server/main.go)
+/cmd/
+  /server/      # Go server entrypoint
+  /client/      # Go client CLI entrypoint
+/client/        # ogen-generated Go API client (DO NOT EDIT)
 /internal/      # Private Go packages (handlers, models, services)
+  /api/         # OpenAPI spec, ogen configs, generated server code
 /frontend/      # React application
   /src/
     /components/
@@ -25,6 +29,7 @@ A pet store application with a Go backend API and a React frontend.
 ## Build & Run
 - **Backend:** `mise run api`
 - **Frontend:** `mise run ui`
+- **Generate (ogen):** `mise run generate`
 - **Tests (Go):** `mise run api:test`
 - **Tests (React):** `mise run ui:test`
 - **Tests (All):** `mise run test`
@@ -56,6 +61,7 @@ A pet store application with a Go backend API and a React frontend.
 - Wrap all markdown files at 80 characters per line
 - Use Conventional Commits (e.g., `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`)
 - Follow 12-Factor App principles (https://12factor.net/) — config via env vars, stateless processes, port binding, disposability, dev/prod parity, etc.
+- Update `docs/REQUIREMENTS.md` and `docs/DESIGN.md` when making changes to features or implementation
 
 ## API Design
 - RESTful endpoints under `/api/v1/`

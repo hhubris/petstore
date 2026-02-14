@@ -1,2 +1,6 @@
 [tools]
 go = "latest"
+
+[tasks.generate]
+description = "Generate server and client code from OpenAPI spec"
+run = "cd {{config_root}} && go generate ./internal/api/..."
