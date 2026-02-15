@@ -79,7 +79,8 @@ internal/
     authz.go             # RequireAdmin() helper
     jwt.go               # Token creation and parsing ✓
     jwt_test.go          # JWT tests ✓
-    context.go           # Context keys, UserFromContext()
+    context.go           # Context keys, ClaimsFromContext() ✓
+    context_test.go      # Context round-trip tests ✓
   pet/
     repository.go        # PetRepository (DB queries) ✓
     service.go           # PetService (CRUD logic)
@@ -505,6 +506,27 @@ Table-driven test cases:
 | `Login`      | wrong password   | Returns `ErrInvalidCredentials`|
 | `GetUser`    | success          | Returns user with correct ID   |
 | `GetUser`    | not found        | Returns `db.ErrNotFound`       |
+
+### Auth Context
+
+`internal/auth/context.go` provides helpers to store and
+retrieve `Claims` in a `context.Context`, using the
+standard unexported-key pattern to avoid collisions.
+
+- **`ContextWithClaims(ctx, Claims) context.Context`** —
+  returns a child context carrying the given Claims.
+- **`ClaimsFromContext(ctx) (Claims, bool)`** — extracts
+  Claims from the context, returning false if absent.
+
+The `SecurityHandler` calls `ContextWithClaims` after
+validating the JWT, and downstream handlers call
+`ClaimsFromContext` to access the authenticated user's ID
+and role without a database lookup.
+
+Only `Claims` (UserID + Role) is stored — not the full
+`User` — because the SecurityHandler only has the JWT.
+Handlers that need the full user can call
+`service.GetUser()`.
 
 ## Frontend Design
 

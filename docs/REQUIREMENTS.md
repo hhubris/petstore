@@ -178,7 +178,7 @@ internal/
     service.go      # AuthService (register, login, get user) ✓
     authz.go        # RequireAdmin() helper
     jwt.go          # Token creation and parsing ✓
-    context.go      # Context key types, UserFromContext()
+    context.go      # Context key types, ClaimsFromContext() ✓
   pet/
     repository.go   # PetRepository (DB queries) ✓
     service.go      # PetService (CRUD logic)

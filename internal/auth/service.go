@@ -37,7 +37,7 @@ type Service struct {
 	token *TokenConfig
 }
 
-// New returns a Service wired to the given repository and
+// NewService returns a Service wired to the given repository and
 // token configuration.
 func NewService(repo Repository, token *TokenConfig) *Service {
 	return &Service{repo: repo, token: token}
