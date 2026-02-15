@@ -74,9 +74,11 @@ internal/
     user.go              # User domain model (private fields)
     repository.go        # UserRepository (DB queries) ✓
     security.go          # ogen SecurityHandler (JWT)
-    service.go           # AuthService (register, login)
+    service.go           # AuthService (register, login) ✓
+    service_test.go      # Service tests (mock repo) ✓
     authz.go             # RequireAdmin() helper
-    jwt.go               # Token creation and parsing
+    jwt.go               # Token creation and parsing ✓
+    jwt_test.go          # JWT tests ✓
     context.go           # Context keys, UserFromContext()
   pet/
     repository.go        # PetRepository (DB queries) ✓
@@ -432,6 +434,78 @@ from `api.AuthUser`. It includes `PasswordHash`,
 appear in API responses. Mapping from `User` to
 `api.AuthUser` happens in the service layer.
 
+### Auth Service
+
+`internal/auth/service.go` contains the business logic
+layer for authentication, sitting between the (future)
+HTTP handler and the repository/JWT layers.
+
+**Interface-based dependency injection:**
+
+The service depends on a `Repository` interface rather than
+the concrete `UserRepository`. This enables testing with a
+hand-written mock — no pgxmock or database needed:
+
+```go
+type Repository interface {
+    Create(ctx context.Context,
+        name, email, passwordHash, role string,
+    ) (User, error)
+    FindByEmail(ctx context.Context,
+        email string,
+    ) (User, error)
+    FindByID(ctx context.Context,
+        id int64,
+    ) (User, error)
+}
+```
+
+`UserRepository` satisfies this interface via Go duck
+typing — no explicit `implements` declaration needed.
+
+**Constructor:** `NewService(repo Repository,
+token *TokenConfig) *Service`
+
+**Methods:**
+
+| Method     | Inputs                       | Returns            | Notes                                           |
+|------------|------------------------------|--------------------|--------------------------------------------------|
+| `Register` | ctx, name, email, password   | `User, error`      | Hashes with bcrypt; role is always `"customer"`  |
+| `Login`    | ctx, email, password         | `string, User, error` | Returns JWT + user; maps not-found to `ErrInvalidCredentials` |
+| `GetUser`  | ctx, id                      | `User, error`      | Delegates to `repo.FindByID`                     |
+
+**Error mapping:**
+
+- `db.ErrNotFound` on login → `ErrInvalidCredentials`
+  (prevents email enumeration)
+- `db.ErrConflict` on register → propagated as-is
+  (handler maps to 409)
+- `db.ErrNotFound` on `GetUser` → propagated as-is
+  (handler maps to 404)
+- bcrypt mismatch on login → `ErrInvalidCredentials`
+
+**Dependencies:** `golang.org/x/crypto/bcrypt` for
+password hashing at `bcrypt.DefaultCost`.
+
+### Auth Service Tests
+
+`internal/auth/service_test.go` uses an external test
+package (`package auth_test`) with a hand-written
+`mockRepo` implementing the `Repository` interface. Each
+mock function is set per-test via function fields.
+
+Table-driven test cases:
+
+| Test         | Case             | Assertion                      |
+|--------------|------------------|--------------------------------|
+| `Register`   | success          | Returns user; password hashed  |
+| `Register`   | duplicate email  | Returns `db.ErrConflict`       |
+| `Login`      | success          | Returns non-empty JWT + user   |
+| `Login`      | unknown email    | Returns `ErrInvalidCredentials`|
+| `Login`      | wrong password   | Returns `ErrInvalidCredentials`|
+| `GetUser`    | success          | Returns user with correct ID   |
+| `GetUser`    | not found        | Returns `db.ErrNotFound`       |
+
 ## Frontend Design
 
 ### Component Hierarchy
@@ -752,3 +826,5 @@ The application follows
 | 26 | Pet repo return type           | api.Pet directly          | No private fields; avoids unnecessary domain duplication     |
 | 27 | User repo return type          | auth.User domain model    | Keeps PasswordHash/timestamps out of API layer               |
 | 28 | Sentinel errors in db pkg      | ErrNotFound, ErrConflict  | Decouples upper layers from pgx error types                  |
+| 29 | Auth service repo interface    | Duck-typed Repository     | Pure Go mock in tests; no pgxmock needed at service layer    |
+| 30 | Login error mapping            | ErrInvalidCredentials     | Same error for bad email/password; prevents enumeration      |
