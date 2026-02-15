@@ -83,7 +83,7 @@ internal/
     context_test.go      # Context round-trip tests ✓
   pet/
     repository.go        # PetRepository (DB queries) ✓
-    service.go           # PetService (CRUD logic)
+    service.go           # PetService (CRUD logic) ✓
 scripts/
   migrate.sh               # Migration runner (sets session vars)
 migrations/
@@ -407,17 +407,88 @@ importing pgx.
 - Repository methods accept the `DBTX` interface,
   compatible with both `*pgxpool.Pool` and `pgx.Tx`.
 
+### Pet Domain Model
+
+`internal/pet/pet.go` defines a `Pet` struct with domain
+types (`*string` for the nullable tag) rather than
+ogen-generated types. This decouples the pet package from
+the API layer, matching the auth package's approach.
+
 ### Pet Repository
 
-`internal/pet/repository.go` — returns `api.Pet` types
-directly (no private fields to hide).
+`internal/pet/repository.go` — returns `pet.Pet` domain
+types. The nullable `tag` column scans directly into
+`*string`.
 
 | Method     | SQL                                  | Notes                                |
 |------------|--------------------------------------|--------------------------------------|
-| `Create`   | `INSERT ... RETURNING id, name, tag` | Maps nullable `tag` to `OptString`   |
+| `Create`   | `INSERT ... RETURNING id, name, tag` | Scans tag directly into `*string`    |
 | `FindByID` | `SELECT ... WHERE id = $1`           | Returns `db.ErrNotFound` on no row   |
 | `FindAll`  | `SELECT ...` + dynamic filters       | Optional `tags` (IN) and `limit`     |
 | `Delete`   | `DELETE ... WHERE id = $1`           | Returns `db.ErrNotFound` on 0 rows   |
+
+### Pet Service
+
+`internal/pet/service.go` contains the business logic
+layer for pets, sitting between the (future) HTTP handler
+and the repository layer.
+
+**Interface-based dependency injection:**
+
+The service depends on a `Repository` interface rather than
+the concrete `PetRepository`. This enables testing with a
+hand-written mock — no pgxmock or database needed:
+
+```go
+type Repository interface {
+    Create(ctx context.Context,
+        name string, tag *string,
+    ) (Pet, error)
+    FindByID(ctx context.Context,
+        id int64,
+    ) (Pet, error)
+    FindAll(ctx context.Context,
+        tags []string, limit *int32,
+    ) ([]Pet, error)
+    Delete(ctx context.Context,
+        id int64,
+    ) error
+}
+```
+
+`PetRepository` satisfies this interface via Go duck
+typing — no explicit `implements` declaration needed.
+
+**Constructor:** `NewService(repo Repository) *Service`
+
+**Methods:**
+
+| Method      | Inputs                    | Returns         | Notes                    |
+|-------------|---------------------------|-----------------|--------------------------|
+| `CreatePet` | ctx, name, tag            | `Pet, error`    | Delegates to repo.Create |
+| `GetPet`    | ctx, id                   | `Pet, error`    | Delegates to repo.FindByID |
+| `ListPets`  | ctx, tags, limit          | `[]Pet, error`  | Delegates to repo.FindAll |
+| `DeletePet` | ctx, id                   | `error`         | Delegates to repo.Delete |
+
+### Pet Service Tests
+
+`internal/pet/service_test.go` uses an external test
+package (`package pet_test`) with a hand-written `mockRepo`
+implementing the `Repository` interface. Each mock function
+is set per-test via function fields.
+
+Table-driven test cases:
+
+| Test                  | Case       | Assertion                      |
+|-----------------------|------------|--------------------------------|
+| `TestServiceCreatePet`| success    | Returns pet with correct fields|
+| `TestServiceCreatePet`| repo error | Returns error                  |
+| `TestServiceGetPet`   | found      | Returns pet with correct ID    |
+| `TestServiceGetPet`   | not found  | Returns `db.ErrNotFound`       |
+| `TestServiceListPets` | success    | Returns expected count         |
+| `TestServiceListPets` | empty      | Returns nil slice              |
+| `TestServiceDeletePet`| success    | Returns nil error              |
+| `TestServiceDeletePet`| not found  | Returns `db.ErrNotFound`       |
 
 ### User Repository
 
@@ -849,7 +920,7 @@ The application follows
 | 23 | Separate ogen configs          | server.yml + client.yml   | Independent feature sets; server doesn't ship client code    |
 | 24 | Repository DB abstraction      | DBTX interface            | Works with pool, transaction, or mock; no concrete dep       |
 | 25 | Repository test approach       | pgxmock (unit tests)      | Fast, no live DB; validates SQL expectations                 |
-| 26 | Pet repo return type           | api.Pet directly          | No private fields; avoids unnecessary domain duplication     |
+| 26 | Pet repo return type           | pet.Pet domain model      | Decouples pet pkg from ogen; handler maps to api types       |
 | 27 | User repo return type          | auth.User domain model    | Keeps PasswordHash/timestamps out of API layer               |
 | 28 | Sentinel errors in db pkg      | ErrNotFound, ErrConflict  | Decouples upper layers from pgx error types                  |
 | 29 | Auth service repo interface    | Duck-typed Repository     | Pure Go mock in tests; no pgxmock needed at service layer    |

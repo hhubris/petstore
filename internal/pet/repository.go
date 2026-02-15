@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/hhubris/petstore/internal/api"
 	"github.com/hhubris/petstore/internal/db"
 )
 
@@ -30,18 +29,15 @@ func (r *PetRepository) Create(
 	ctx context.Context,
 	name string,
 	tag *string,
-) (api.Pet, error) {
-	var pet api.Pet
+) (Pet, error) {
+	var pet Pet
 	err := r.db.QueryRow(ctx,
 		"INSERT INTO pets (name, tag) VALUES ($1, $2) "+
 			"RETURNING id, name, tag",
 		name, tag,
-	).Scan(&pet.ID, &pet.Name, &tag)
+	).Scan(&pet.ID, &pet.Name, &pet.Tag)
 	if err != nil {
-		return api.Pet{}, fmt.Errorf("create pet: %w", err)
-	}
-	if tag != nil {
-		pet.Tag = api.NewOptString(*tag)
+		return Pet{}, fmt.Errorf("create pet: %w", err)
 	}
 	return pet, nil
 }
@@ -51,23 +47,17 @@ func (r *PetRepository) Create(
 func (r *PetRepository) FindByID(
 	ctx context.Context,
 	id int64,
-) (api.Pet, error) {
-	var (
-		pet api.Pet
-		tag *string
-	)
+) (Pet, error) {
+	var pet Pet
 	err := r.db.QueryRow(ctx,
 		"SELECT id, name, tag FROM pets WHERE id = $1",
 		id,
-	).Scan(&pet.ID, &pet.Name, &tag)
+	).Scan(&pet.ID, &pet.Name, &pet.Tag)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return api.Pet{}, db.ErrNotFound
+			return Pet{}, db.ErrNotFound
 		}
-		return api.Pet{}, fmt.Errorf("find pet by id: %w", err)
-	}
-	if tag != nil {
-		pet.Tag = api.NewOptString(*tag)
+		return Pet{}, fmt.Errorf("find pet by id: %w", err)
 	}
 	return pet, nil
 }
@@ -78,7 +68,7 @@ func (r *PetRepository) FindAll(
 	ctx context.Context,
 	tags []string,
 	limit *int32,
-) ([]api.Pet, error) {
+) ([]Pet, error) {
 	var (
 		query strings.Builder
 		args  []any
@@ -113,17 +103,11 @@ func (r *PetRepository) FindAll(
 	}
 	defer rows.Close()
 
-	var pets []api.Pet
+	var pets []Pet
 	for rows.Next() {
-		var (
-			pet api.Pet
-			tag *string
-		)
-		if err := rows.Scan(&pet.ID, &pet.Name, &tag); err != nil {
+		var pet Pet
+		if err := rows.Scan(&pet.ID, &pet.Name, &pet.Tag); err != nil {
 			return nil, fmt.Errorf("scan pet: %w", err)
-		}
-		if tag != nil {
-			pet.Tag = api.NewOptString(*tag)
 		}
 		pets = append(pets, pet)
 	}

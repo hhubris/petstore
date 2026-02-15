@@ -181,7 +181,7 @@ internal/
     context.go      # Context key types, ClaimsFromContext() ✓
   pet/
     repository.go   # PetRepository (DB queries) ✓
-    service.go      # PetService (CRUD logic)
+    service.go      # PetService (CRUD logic) ✓
 migrations/
   000001–000006     # Schema and role setup
 ```

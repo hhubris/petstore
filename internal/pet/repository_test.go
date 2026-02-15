@@ -7,10 +7,11 @@ import (
 
 	"github.com/pashagolub/pgxmock/v4"
 
-	"github.com/hhubris/petstore/internal/api"
 	"github.com/hhubris/petstore/internal/db"
 	"github.com/hhubris/petstore/internal/pet"
 )
+
+func ptrStr(s string) *string { return &s }
 
 func TestCreate(t *testing.T) {
 	ctx := context.Background()
@@ -21,7 +22,7 @@ func TestCreate(t *testing.T) {
 		petName string
 		tag     *string
 		mock    func(m pgxmock.PgxPoolIface)
-		want    api.Pet
+		want    pet.Pet
 		wantErr bool
 	}{
 		{
@@ -36,10 +37,10 @@ func TestCreate(t *testing.T) {
 							AddRow(int64(1), "Fido", &tagVal),
 					)
 			},
-			want: api.Pet{
+			want: pet.Pet{
 				ID:   1,
 				Name: "Fido",
-				Tag:  api.NewOptString("dog"),
+				Tag:  ptrStr("dog"),
 			},
 		},
 		{
@@ -54,7 +55,7 @@ func TestCreate(t *testing.T) {
 							AddRow(int64(2), "Luna", (*string)(nil)),
 					)
 			},
-			want: api.Pet{
+			want: pet.Pet{
 				ID:   2,
 				Name: "Luna",
 			},
@@ -96,7 +97,7 @@ func TestCreate(t *testing.T) {
 			}
 			if got.ID != tt.want.ID ||
 				got.Name != tt.want.Name ||
-				got.Tag != tt.want.Tag {
+				!ptrStrEq(got.Tag, tt.want.Tag) {
 				t.Errorf("got %+v, want %+v", got, tt.want)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
@@ -114,7 +115,7 @@ func TestFindByID(t *testing.T) {
 		name    string
 		id      int64
 		mock    func(m pgxmock.PgxPoolIface)
-		want    api.Pet
+		want    pet.Pet
 		wantErr error
 	}{
 		{
@@ -128,10 +129,10 @@ func TestFindByID(t *testing.T) {
 							AddRow(int64(1), "Whiskers", &tagVal),
 					)
 			},
-			want: api.Pet{
+			want: pet.Pet{
 				ID:   1,
 				Name: "Whiskers",
-				Tag:  api.NewOptString("cat"),
+				Tag:  ptrStr("cat"),
 			},
 		},
 		{
@@ -173,7 +174,7 @@ func TestFindByID(t *testing.T) {
 			}
 			if got.ID != tt.want.ID ||
 				got.Name != tt.want.Name ||
-				got.Tag != tt.want.Tag {
+				!ptrStrEq(got.Tag, tt.want.Tag) {
 				t.Errorf("got %+v, want %+v", got, tt.want)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
@@ -194,7 +195,7 @@ func TestFindAll(t *testing.T) {
 		tags    []string
 		limit   *int32
 		mock    func(m pgxmock.PgxPoolIface)
-		want    []api.Pet
+		want    []pet.Pet
 		wantErr bool
 	}{
 		{
@@ -209,8 +210,8 @@ func TestFindAll(t *testing.T) {
 							AddRow(int64(2), "Luna", (*string)(nil)),
 					)
 			},
-			want: []api.Pet{
-				{ID: 1, Name: "Fido", Tag: api.NewOptString("dog")},
+			want: []pet.Pet{
+				{ID: 1, Name: "Fido", Tag: ptrStr("dog")},
 				{ID: 2, Name: "Luna"},
 			},
 		},
@@ -228,9 +229,9 @@ func TestFindAll(t *testing.T) {
 							AddRow(int64(3), "Mimi", &tagCat),
 					)
 			},
-			want: []api.Pet{
-				{ID: 1, Name: "Fido", Tag: api.NewOptString("dog")},
-				{ID: 3, Name: "Mimi", Tag: api.NewOptString("cat")},
+			want: []pet.Pet{
+				{ID: 1, Name: "Fido", Tag: ptrStr("dog")},
+				{ID: 3, Name: "Mimi", Tag: ptrStr("cat")},
 			},
 		},
 		{
@@ -246,8 +247,8 @@ func TestFindAll(t *testing.T) {
 							AddRow(int64(1), "Fido", &tagDog),
 					)
 			},
-			want: []api.Pet{
-				{ID: 1, Name: "Fido", Tag: api.NewOptString("dog")},
+			want: []pet.Pet{
+				{ID: 1, Name: "Fido", Tag: ptrStr("dog")},
 			},
 		},
 		{
@@ -263,8 +264,8 @@ func TestFindAll(t *testing.T) {
 							AddRow(int64(1), "Fido", &tagDog),
 					)
 			},
-			want: []api.Pet{
-				{ID: 1, Name: "Fido", Tag: api.NewOptString("dog")},
+			want: []pet.Pet{
+				{ID: 1, Name: "Fido", Tag: ptrStr("dog")},
 			},
 		},
 		{
@@ -310,7 +311,7 @@ func TestFindAll(t *testing.T) {
 			for i := range got {
 				if got[i].ID != tt.want[i].ID ||
 					got[i].Name != tt.want[i].Name ||
-					got[i].Tag != tt.want[i].Tag {
+					!ptrStrEq(got[i].Tag, tt.want[i].Tag) {
 					t.Errorf("pet[%d]: got %+v, want %+v",
 						i, got[i], tt.want[i])
 				}
@@ -380,4 +381,15 @@ func TestDelete(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ptrStrEq compares two *string values for equality.
+func ptrStrEq(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
