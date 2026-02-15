@@ -176,7 +176,7 @@ internal/
     repository.go   # UserRepository (DB queries) ✓
     security.go     # ogen SecurityHandler (JWT validation) ✓
     service.go      # AuthService (register, login, get user) ✓
-    authz.go        # RequireAdmin() helper
+    authz.go        # RequireAdmin() helper ✓
     jwt.go          # Token creation and parsing ✓
     context.go      # Context key types, ClaimsFromContext() ✓
   pet/

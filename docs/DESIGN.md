@@ -76,7 +76,7 @@ internal/
     security.go          # ogen SecurityHandler (JWT) ✓
     service.go           # AuthService (register, login) ✓
     service_test.go      # Service tests (mock repo) ✓
-    authz.go             # RequireAdmin() helper
+    authz.go             # RequireAdmin() helper ✓
     jwt.go               # Token creation and parsing ✓
     jwt_test.go          # JWT tests ✓
     context.go           # Context keys, ClaimsFromContext() ✓
