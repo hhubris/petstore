@@ -174,7 +174,7 @@ internal/
   auth/
     user.go         # User domain model (private fields)
     repository.go   # UserRepository (DB queries) ✓
-    security.go     # ogen SecurityHandler (JWT validation)
+    security.go     # ogen SecurityHandler (JWT validation) ✓
     service.go      # AuthService (register, login, get user) ✓
     authz.go        # RequireAdmin() helper
     jwt.go          # Token creation and parsing ✓

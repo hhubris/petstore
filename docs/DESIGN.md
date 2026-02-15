@@ -73,7 +73,7 @@ internal/
   auth/
     user.go              # User domain model (private fields)
     repository.go        # UserRepository (DB queries) ✓
-    security.go          # ogen SecurityHandler (JWT)
+    security.go          # ogen SecurityHandler (JWT) ✓
     service.go           # AuthService (register, login) ✓
     service_test.go      # Service tests (mock repo) ✓
     authz.go             # RequireAdmin() helper
@@ -210,16 +210,20 @@ Register ──▶ Login ──▶ Cookie set ──▶ Request + cookie
 ### SecurityHandler Implementation
 
 ogen generates a `SecurityHandler` interface with a
-`HandleCookieAuth` method. The implementation:
+`HandleCookieAuth` method. The implementation in
+`internal/auth/security.go`:
 
-1. Reads the `access_token` cookie from the request.
-2. Parses and validates the JWT (signature, expiration).
-3. Extracts claims (`sub`, `role`).
-4. Checks the `x-required-role` vendor extension — if the
-   operation requires `admin`, verifies the claim matches.
-5. Stores the authenticated user in the request context
-   via `UserFromContext()` / `ContextWithUser()`.
-6. Returns an error if any step fails (401 or 403).
+1. Parses and validates the JWT via
+   `TokenConfig.ParseToken()` (signature, expiration).
+2. Extracts `Claims` (`UserID`, `Role`).
+3. Checks an `adminOperations` map — since ogen does not
+   populate `CookieAuth.Roles` from `x-required-role`, the
+   handler maintains its own map of operations that require
+   the `admin` role (`AddPet`, `DeletePet`).
+4. Stores `Claims` in the request context via
+   `ContextWithClaims()`.
+5. Returns `ErrInvalidToken` (401) or `ErrForbidden` (403)
+   on failure.
 
 ### Password Hashing Flow
 
@@ -240,9 +244,9 @@ Login:
 ### Role Enforcement
 
 - Roles are embedded in the JWT `role` claim.
-- The `SecurityHandler` reads the `x-required-role`
-  extension from the operation spec to determine the
-  minimum required role.
+- The `SecurityHandler` uses an `adminOperations` map to
+  determine which operations require the `admin` role
+  (ogen does not extract `x-required-role` at runtime).
 - A `RequireAdmin()` helper in `internal/auth/authz.go`
   provides a reusable check for handler-level use.
 - Role changes require re-login (new JWT) since the role
