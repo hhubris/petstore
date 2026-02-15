@@ -59,6 +59,7 @@ A pet store application with a Go backend API and a React frontend.
 - Write tests for new functionality
 - Keep PRs focused — one concern per change
 - Wrap all markdown files at 80 characters per line
+  (tables are exempt)
 - Use Conventional Commits (e.g., `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`)
 - Follow 12-Factor App principles (https://12factor.net/) — config via env vars, stateless processes, port binding, disposability, dev/prod parity, etc.
 - Update `docs/REQUIREMENTS.md` and `docs/DESIGN.md` when making changes to features or implementation

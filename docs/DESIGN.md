@@ -41,8 +41,8 @@ The application follows a classic three-tier architecture:
   CLI tooling, integration tests, and any Go consumer of
   the API.
 - **Database** — PostgreSQL stores pets and users. Accessed
-  only by the backend through `database/sql` with the
-  `pgx` driver.
+  only by the backend through `jackc/pgx/v5` (native pgx
+  interface, no `database/sql` wrapper).
 
 All tiers are independently deployable and communicate
 over well-defined interfaces (HTTP, SQL).
@@ -66,18 +66,21 @@ internal/
     ogen-server.yml      # ogen config: server-only generation
     ogen-client.yml      # ogen config: client-only generation
     oas_*.go             # ogen-generated server (DO NOT EDIT)
+  db/
+    db.go                # DBTX interface, sentinel errors
   handler/
     handler.go           # Implements ogen Handler interface
   auth/
+    user.go              # User domain model (private fields)
+    repository.go        # UserRepository (DB queries) ✓
     security.go          # ogen SecurityHandler (JWT)
     service.go           # AuthService (register, login)
-    repository.go        # UserRepository (DB queries)
     authz.go             # RequireAdmin() helper
     jwt.go               # Token creation and parsing
     context.go           # Context keys, UserFromContext()
   pet/
+    repository.go        # PetRepository (DB queries) ✓
     service.go           # PetService (CRUD logic)
-    repository.go        # PetRepository (DB queries)
 scripts/
   migrate.sh               # Migration runner (sets session vars)
 migrations/
@@ -359,20 +362,75 @@ container:
 ### Connection Management
 
 - Connection string comes from `DATABASE_URL` env var.
-- Use `database/sql` with `pgx` stdlib adapter for
-  connection pooling.
-- Pool settings (max open, max idle, lifetime) are
-  configured via `DATABASE_URL` parameters or code
-  defaults.
+- Use `pgxpool.Pool` from `jackc/pgx/v5` for connection
+  pooling (native pgx, not `database/sql`).
+- Pool settings are configured via `DATABASE_URL`
+  parameters or `pgxpool.Config` defaults.
+
+### DBTX Interface
+
+Repositories depend on a `DBTX` interface defined in
+`internal/db/db.go`:
+
+```go
+type DBTX interface {
+    Query(ctx context.Context, sql string,
+        args ...any) (pgx.Rows, error)
+    QueryRow(ctx context.Context, sql string,
+        args ...any) pgx.Row
+    Exec(ctx context.Context, sql string,
+        args ...any) (pgconn.CommandTag, error)
+}
+```
+
+This interface is satisfied by `*pgxpool.Pool`, `pgx.Tx`,
+and `pgxmock` — enabling repositories to work with a live
+pool, inside a transaction, or under test.
+
+Sentinel errors `db.ErrNotFound` and `db.ErrConflict` let
+upper layers translate to HTTP status codes without
+importing pgx.
 
 ### Transaction Boundaries
 
 - Registration (insert user) runs in a single query — no
   explicit transaction needed.
 - Operations touching multiple tables use explicit
-  transactions via `sql.Tx`.
-- Repository methods accept a `db` interface compatible
-  with both `*sql.DB` and `*sql.Tx`.
+  transactions via `pgx.Tx`.
+- Repository methods accept the `DBTX` interface,
+  compatible with both `*pgxpool.Pool` and `pgx.Tx`.
+
+### Pet Repository
+
+`internal/pet/repository.go` — returns `api.Pet` types
+directly (no private fields to hide).
+
+| Method     | SQL                                  | Notes                                |
+|------------|--------------------------------------|--------------------------------------|
+| `Create`   | `INSERT ... RETURNING id, name, tag` | Maps nullable `tag` to `OptString`   |
+| `FindByID` | `SELECT ... WHERE id = $1`           | Returns `db.ErrNotFound` on no row   |
+| `FindAll`  | `SELECT ...` + dynamic filters       | Optional `tags` (IN) and `limit`     |
+| `Delete`   | `DELETE ... WHERE id = $1`           | Returns `db.ErrNotFound` on 0 rows   |
+
+### User Repository
+
+`internal/auth/repository.go` — returns `auth.User`
+domain model (contains `PasswordHash` and timestamps
+that must not leak to the API).
+
+| Method        | SQL                              | Notes                                       |
+|---------------|----------------------------------|---------------------------------------------|
+| `Create`      | `INSERT ... RETURNING id, ...`   | Returns `db.ErrConflict` on unique violation |
+| `FindByEmail` | `SELECT ... WHERE email = $1`    | Returns `db.ErrNotFound` on no row           |
+| `FindByID`    | `SELECT ... WHERE id = $1`       | Returns `db.ErrNotFound` on no row           |
+
+### User Domain Model
+
+`internal/auth/user.go` defines a `User` struct separate
+from `api.AuthUser`. It includes `PasswordHash`,
+`CreatedAt`, and `UpdatedAt` — fields that must never
+appear in API responses. Mapping from `User` to
+`api.AuthUser` happens in the service layer.
 
 ## Frontend Design
 
@@ -631,8 +689,8 @@ The application follows
   business logic in isolation.
 - **Handler tests:** Use `httptest` to spin up the ogen
   server with real handlers and mock services.
-- **Repository tests:** Integration tests against a test
-  PostgreSQL instance (or skip with build tag).
+- **Repository tests:** Unit tests using `pgxmock` to mock
+  the `DBTX` interface; no live database required.
 - **Auth tests:** Token creation/parsing, expired token
   rejection, role enforcement, bcrypt round-trip.
 - **Run:** `mise run api:test` (wraps `go test ./...`).
@@ -681,7 +739,7 @@ The application follows
 | 13 | Frontend routing               | React Router              | De facto standard for React SPAs                             |
 | 14 | API base path                  | /api/v1/                  | Versioned; separates API from frontend routes                |
 | 15 | Logging                        | slog (std library)        | No external dependency; structured output                    |
-| 16 | DB driver                      | pgx (stdlib adapter)      | High-performance PostgreSQL driver with pool support         |
+| 16 | DB driver                      | pgx/v5 (native)           | Direct pgx interface; no database/sql overhead               |
 | 17 | Dev migration strategy         | Auto-run on startup       | Fast iteration; prod uses explicit CLI                       |
 | 18 | Service layer pattern          | Interface-based           | Enables mock injection for testing                           |
 | 19 | Rate limiting                  | Per-IP on auth endpoints  | Mitigates brute-force without external infrastructure        |
@@ -689,3 +747,8 @@ The application follows
 | 21 | Go client generation           | ogen from same spec       | Type-safe client; single source of truth for both sides      |
 | 22 | Client package location        | `/client` (root)          | Importable by external modules; separate from internal code  |
 | 23 | Separate ogen configs          | server.yml + client.yml   | Independent feature sets; server doesn't ship client code    |
+| 24 | Repository DB abstraction      | DBTX interface            | Works with pool, transaction, or mock; no concrete dep       |
+| 25 | Repository test approach       | pgxmock (unit tests)      | Fast, no live DB; validates SQL expectations                 |
+| 26 | Pet repo return type           | api.Pet directly          | No private fields; avoids unnecessary domain duplication     |
+| 27 | User repo return type          | auth.User domain model    | Keeps PasswordHash/timestamps out of API layer               |
+| 28 | Sentinel errors in db pkg      | ErrNotFound, ErrConflict  | Decouples upper layers from pgx error types                  |

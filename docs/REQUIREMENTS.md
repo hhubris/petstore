@@ -165,20 +165,28 @@ CREATE TABLE users (
 );
 ```
 
-### Architecture (for future implementation)
+### Architecture
 
 ```
 internal/
+  db/
+    db.go           # DBTX interface, sentinel errors
   auth/
+    user.go         # User domain model (private fields)
+    repository.go   # UserRepository (DB queries) ✓
     security.go     # ogen SecurityHandler (JWT validation)
     service.go      # AuthService (register, login, get user)
-    repository.go   # UserRepository (DB queries)
     authz.go        # RequireAdmin() helper
     jwt.go          # Token creation and parsing
     context.go      # Context key types, UserFromContext()
+  pet/
+    repository.go   # PetRepository (DB queries) ✓
+    service.go      # PetService (CRUD logic)
 migrations/
-  001_create_users_table.sql
+  000001–000006     # Schema and role setup
 ```
+
+Items marked ✓ are implemented; others are planned.
 
 ### Key Design Decisions
 
