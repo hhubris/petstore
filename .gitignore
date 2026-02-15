@@ -21,3 +21,6 @@ frontend/dist/
 
 # Claude Code
 .claude/settings.local.json
+
+# mise local config file
+.config/mise/mise.local.toml
