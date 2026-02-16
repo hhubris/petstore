@@ -11,19 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DBTX is the common interface satisfied by *pgxpool.Pool,
-// pgx.Tx, and pgxmock. Repositories depend on this
-// interface so they can be used with any of those
-// implementations.
-type DBTX interface {
-	Query(ctx context.Context, sql string,
-		args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string,
-		args ...any) pgx.Row
-	Exec(ctx context.Context, sql string,
-		args ...any) (pgconn.CommandTag, error)
-}
-
 // Sentinel errors returned by repositories. Upper layers
 // translate these into appropriate HTTP status codes.
 var (
@@ -62,10 +49,25 @@ func New(ctx context.Context) (*DB, error) {
 	return &DB{pool: pool}, nil
 }
 
-// DBTX returns the underlying DBTX interface for use by
-// repositories.
-func (d *DB) DBTX() DBTX {
-	return d.pool
+// Query executes a query that returns rows.
+func (d *DB) Query(
+	ctx context.Context, sql string, args ...any,
+) (pgx.Rows, error) {
+	return d.pool.Query(ctx, sql, args...)
+}
+
+// QueryRow executes a query that returns at most one row.
+func (d *DB) QueryRow(
+	ctx context.Context, sql string, args ...any,
+) pgx.Row {
+	return d.pool.QueryRow(ctx, sql, args...)
+}
+
+// Exec executes a query that doesn't return rows.
+func (d *DB) Exec(
+	ctx context.Context, sql string, args ...any,
+) (pgconn.CommandTag, error) {
+	return d.pool.Exec(ctx, sql, args...)
 }
 
 // Close releases all database resources.

@@ -8,19 +8,32 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/hhubris/petstore/internal/db"
 )
 
+// dbtx is the database interface required by
+// PetRepository. Satisfied by *pgxpool.Pool, pgx.Tx, and
+// pgxmock.
+type dbtx interface {
+	Query(ctx context.Context, sql string,
+		args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string,
+		args ...any) pgx.Row
+	Exec(ctx context.Context, sql string,
+		args ...any) (pgconn.CommandTag, error)
+}
+
 // PetRepository provides database access for pets.
 type PetRepository struct {
-	db db.DBTX
+	db dbtx
 }
 
 // NewPetRepository returns a PetRepository backed by the
-// given DBTX.
-func NewPetRepository(dbtx db.DBTX) *PetRepository {
-	return &PetRepository{db: dbtx}
+// given database connection.
+func NewPetRepository(conn dbtx) *PetRepository {
+	return &PetRepository{db: conn}
 }
 
 // Create inserts a new pet and returns it with the

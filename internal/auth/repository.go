@@ -11,19 +11,27 @@ import (
 	"github.com/hhubris/petstore/internal/db"
 )
 
+// dbtx is the database interface required by
+// UserRepository. Satisfied by *pgxpool.Pool, pgx.Tx, and
+// pgxmock.
+type dbtx interface {
+	QueryRow(ctx context.Context, sql string,
+		args ...any) pgx.Row
+}
+
 // UniqueViolation is the PostgreSQL error code for a
 // unique constraint violation.
 const uniqueViolation = "23505"
 
 // UserRepository provides database access for users.
 type UserRepository struct {
-	db db.DBTX
+	db dbtx
 }
 
 // NewUserRepository returns a UserRepository backed by the
-// given DBTX.
-func NewUserRepository(dbtx db.DBTX) *UserRepository {
-	return &UserRepository{db: dbtx}
+// given database connection.
+func NewUserRepository(conn dbtx) *UserRepository {
+	return &UserRepository{db: conn}
 }
 
 // Create inserts a new user and returns it with the

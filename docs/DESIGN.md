@@ -384,41 +384,44 @@ container:
 - Pool settings are configured via `DATABASE_URL`
   parameters or `pgxpool.Config` defaults.
 
-### DBTX Interface
+### DBTX Interfaces
 
-Repositories depend on a `DBTX` interface defined in
-`internal/db/db.go`:
-
-```go
-type DBTX interface {
-    Query(ctx context.Context, sql string,
-        args ...any) (pgx.Rows, error)
-    QueryRow(ctx context.Context, sql string,
-        args ...any) pgx.Row
-    Exec(ctx context.Context, sql string,
-        args ...any) (pgconn.CommandTag, error)
-}
-```
-
-This interface is satisfied by `*pgxpool.Pool`, `pgx.Tx`,
-and `pgxmock` — enabling repositories to work with a live
+Each repository package defines its own unexported `dbtx`
+interface containing only the pgx methods it actually
+uses. For example, `auth` needs only `QueryRow`, while
+`pet` needs `Query`, `QueryRow`, and `Exec`. These
+interfaces are satisfied by `*pgxpool.Pool`, `pgx.Tx`, and
+`pgxmock` — enabling repositories to work with a live
 pool, inside a transaction, or under test.
 
-Sentinel errors `db.ErrNotFound` and `db.ErrConflict` let
-upper layers translate to HTTP status codes without
-importing pgx.
+Sentinel errors `db.ErrNotFound` and `db.ErrConflict` in
+`internal/db` let upper layers translate to HTTP status
+codes without importing pgx.
 
-### Connection Pool
+### Connection Management
 
-`db.DB` encapsulates database connectivity so that no
-package outside `internal/db` imports pgx directly:
+`db.DB` encapsulates database connectivity. It delegates
+`Query`, `QueryRow`, and `Exec` to the underlying pool,
+so no package outside `internal/db` ever imports pgx for
+connection management:
 
 - **`New(ctx)`** — reads `DATABASE_URL` from the
   environment, connects to the database, and pings to
   verify connectivity. Returns `*db.DB`.
-- **`DBTX()`** — returns the underlying `DBTX` interface
-  for use by repositories.
+- **`Query`**, **`QueryRow`**, **`Exec`** — delegate to
+  the underlying connection pool.
 - **`Close()`** — releases all database resources.
+
+Each repository package defines its own unexported `dbtx`
+interface with only the methods it needs:
+
+- `auth` requires only `QueryRow`
+- `pet` requires `Query`, `QueryRow`, and `Exec`
+
+`*db.DB` satisfies both interfaces via duck typing, as
+does `pgxmock` in tests. This follows the Go convention
+of defining interfaces at the consumer, not the
+implementor.
 
 ### Transaction Boundaries
 
@@ -728,7 +731,7 @@ Run(ctx)
   │    └─ reads DATABASE_URL, connects, pings
   │         → *db.DB (caller defers Close)
   │
-  ├─ build(dbtx, jwtSecret, secure)
+  ├─ build(database, jwtSecret, secure)
   │    │
   │    ├─ auth.NewTokenConfig
   │    ├─ auth.NewUserRepository → auth.NewService
@@ -770,8 +773,8 @@ The `secure` bool passed to `handler.New` controls the
    blocks on `<-ctx.Done()`.
 3. On cancellation, `srv.Shutdown` is called with a 10s
    timeout to drain in-flight requests.
-4. After `serve` returns, `Run` defers `pool.Close()` to
-   close all database connections.
+4. After `serve` returns, `Run` defers `database.Close()`
+   to release all database connections.
 
 ## Frontend Design
 

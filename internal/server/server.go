@@ -44,7 +44,7 @@ func Run(ctx context.Context) error {
 	}
 	defer database.Close()
 
-	h, err := build(database.DBTX(), jwtSecret, secure)
+	h, err := build(database, jwtSecret, secure)
 	if err != nil {
 		return fmt.Errorf("building server: %w", err)
 	}
@@ -62,7 +62,7 @@ func Run(ctx context.Context) error {
 // build wires up all dependencies and returns an
 // http.Handler ready to serve requests.
 func build(
-	dbtx db.DBTX,
+	database *db.DB,
 	jwtSecret string,
 	secure bool,
 ) (http.Handler, error) {
@@ -73,11 +73,11 @@ func build(
 		)
 	}
 
-	userRepo := auth.NewUserRepository(dbtx)
+	userRepo := auth.NewUserRepository(database)
 	authSvc := auth.NewService(userRepo, tc)
 	secHandler := auth.NewSecurityHandler(tc)
 
-	petRepo := pet.NewPetRepository(dbtx)
+	petRepo := pet.NewPetRepository(database)
 	petSvc := pet.NewService(petRepo)
 
 	h := handler.New(petSvc, authSvc, secure)
