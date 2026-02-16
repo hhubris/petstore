@@ -69,7 +69,15 @@ internal/
   db/
     db.go                # DBTX interface, sentinel errors
   handler/
-    handler.go           # Implements ogen Handler interface
+    handler.go           # Struct, interfaces, error mapping ✓
+    add_pet.go           # POST /pets ✓
+    delete_pet.go        # DELETE /pets/{id} ✓
+    find_pets.go         # GET /pets ✓
+    find_pet_by_id.go    # GET /pets/{id} ✓
+    register_user.go     # POST /auth/register ✓
+    login_user.go        # POST /auth/login ✓
+    logout_user.go       # POST /auth/logout ✓
+    get_current_user.go  # GET /auth/me ✓
   auth/
     user.go              # User domain model (private fields)
     repository.go        # UserRepository (DB queries) ✓
@@ -602,6 +610,87 @@ Only `Claims` (UserID + Role) is stored — not the full
 `User` — because the SecurityHandler only has the JWT.
 Handlers that need the full user can call
 `service.GetUser()`.
+
+## Handler Design
+
+### One File Per Endpoint
+
+Each ogen `Handler` method lives in its own file under
+`internal/handler/`, named after the operation (e.g.,
+`add_pet.go`, `login_user.go`). This keeps files small and
+navigable in larger APIs. Common code (struct, interfaces,
+mappers, error handling) lives in `handler.go`.
+
+### Service Interfaces
+
+The handler depends on `PetService` and `AuthService`
+interfaces — not the concrete `*pet.Service` or
+`*auth.Service` types. This enables mock injection in tests
+without importing repository or database packages:
+
+```go
+type PetService interface {
+    CreatePet(ctx, name, tag) (pet.Pet, error)
+    GetPet(ctx, id) (pet.Pet, error)
+    ListPets(ctx, tags, limit) ([]pet.Pet, error)
+    DeletePet(ctx, id) error
+}
+
+type AuthService interface {
+    Register(ctx, name, email, password) (auth.User, error)
+    Login(ctx, email, password) (string, auth.User, error)
+    GetUser(ctx, id) (auth.User, error)
+}
+```
+
+### Response Writer Context Pattern
+
+ogen v1.18.0 does not expose `http.ResponseWriter` to handler
+methods. To set and clear cookies for login/logout, the
+handler layer uses a context-injection pattern:
+
+1. `WrapWithResponseWriter(handler)` — HTTP middleware that
+   stores the `ResponseWriter` in each request's context.
+2. `responseWriterFromContext(ctx)` — retrieves the writer
+   inside handler methods.
+3. Used by `internal/server` when wiring up the ogen server:
+   `handler.WrapWithResponseWriter(ogenServer)`.
+
+### Error Mapping
+
+`NewError` translates sentinel errors from the service and
+database layers into ogen `ErrorStatusCode` responses:
+
+| Sentinel Error              | HTTP Status |
+|-----------------------------|-------------|
+| `db.ErrNotFound`            | 404         |
+| `db.ErrConflict`            | 409         |
+| `auth.ErrInvalidCredentials`| 401         |
+| `auth.ErrUnauthorized`      | 401         |
+| `auth.ErrForbidden`         | 403         |
+| `auth.ErrInvalidToken`      | 401         |
+| (default)                   | 500         |
+
+### Domain-to-API Mappers
+
+Two unexported helpers convert domain models to ogen types:
+
+- `petToAPI(pet.Pet) api.Pet` — maps `*string` tag to
+  `OptString`
+- `userToAPI(auth.User) api.AuthUser` — maps role string to
+  `AuthUserRole` enum
+
+### Handler Tests
+
+Tests use an external test package (`handler_test`) with
+hand-written mock services following the same function-field
+pattern as the service tests. Table-driven tests cover:
+
+- Happy path for each endpoint
+- Service errors producing correct HTTP status codes
+- Login: cookie set with correct name/value/flags
+- Logout: cookie cleared (MaxAge=-1)
+- Missing response writer in context returns error
 
 ## Frontend Design
 

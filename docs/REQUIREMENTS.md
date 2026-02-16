@@ -183,6 +183,16 @@ internal/
   pet/
     repository.go   # PetRepository (DB queries) ✓
     service.go      # PetService (CRUD logic) ✓
+  handler/
+    handler.go      # Struct, interfaces, error mapping ✓
+    add_pet.go      # POST /pets ✓
+    delete_pet.go   # DELETE /pets/{id} ✓
+    find_pets.go    # GET /pets ✓
+    find_pet_by_id.go # GET /pets/{id} ✓
+    register_user.go  # POST /auth/register ✓
+    login_user.go   # POST /auth/login ✓
+    logout_user.go  # POST /auth/logout ✓
+    get_current_user.go # GET /auth/me ✓
 migrations/
   000001–000006     # Schema and role setup
 ```
