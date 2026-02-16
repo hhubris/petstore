@@ -13,11 +13,19 @@ depends = ["db:start", "db:migrate"]
 [tasks."db:start"]
 description = "Start PostgreSQL container with persistent volume"
 run = """
-docker run --name petstore-db \
-  -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-  -v petstore-data:/var/lib/postgresql \
-  -p 5432:5432 \
-  -d docker.io/library/postgres:latest
+if docker inspect petstore-db >/dev/null 2>&1; then
+  if [ "$(docker inspect -f '{{"{{"}}.State.Running{{"}}"}}' petstore-db)" = "true" ]; then
+    echo "petstore-db is already running"
+    exit 0
+  fi
+  docker start petstore-db
+else
+  docker run --name petstore-db \
+    -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+    -v petstore-data:/var/lib/postgresql \
+    -p 5432:5432 \
+    -d docker.io/library/postgres:latest
+fi
 """
 
 [tasks."db:stop"]
@@ -39,6 +47,59 @@ run = "{{config_root}}/scripts/migrate.sh"
 [tasks."api:run"]
 description = "Run the API server"
 run = "go run ./cmd/server"
+
+[tasks."api:bg"]
+description = "Build and run the API server in the background"
+run = """
+PIDFILE="{{config_root}}/.petstore.pid"
+BINARY="{{config_root}}/.petstore-server"
+
+# Kill previous instance if running.
+if [ -f "$PIDFILE" ]; then
+  OLD_PID=$(cat "$PIDFILE")
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Stopping previous server (PID $OLD_PID)..."
+    kill "$OLD_PID"
+    # Wait for it to exit (up to 10s).
+    for i in $(seq 1 100); do
+      kill -0 "$OLD_PID" 2>/dev/null || break
+      sleep 0.1
+    done
+  fi
+  rm -f "$PIDFILE"
+fi
+
+echo "Building..."
+go build -o "$BINARY" ./cmd/server
+
+echo "Starting server in background..."
+nohup "$BINARY" > "{{config_root}}/.petstore.log" 2>&1 &
+echo $! > "$PIDFILE"
+echo "Server started (PID $(cat "$PIDFILE")), log: .petstore.log"
+"""
+
+[tasks."api:stop"]
+description = "Stop the background API server"
+run = """
+PIDFILE="{{config_root}}/.petstore.pid"
+if [ ! -f "$PIDFILE" ]; then
+  echo "No PID file found — server not running"
+  exit 0
+fi
+PID=$(cat "$PIDFILE")
+if kill -0 "$PID" 2>/dev/null; then
+  echo "Stopping server (PID $PID)..."
+  kill "$PID"
+  for i in $(seq 1 100); do
+    kill -0 "$PID" 2>/dev/null || break
+    sleep 0.1
+  done
+  echo "Stopped"
+else
+  echo "Server not running (stale PID file)"
+fi
+rm -f "$PIDFILE"
+"""
 
 [tasks."api:test"]
 description = "Run Go tests"
