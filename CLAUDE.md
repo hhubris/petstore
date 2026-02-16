@@ -71,7 +71,7 @@ A pet store application with a Go backend API and a React frontend.
 - Consistent error response format: `{"error": "message"}`
 
 ## Environment Variables
-- `PORT` — server port (default: 8080)
+- `ADDRESS` — listen address (default: `:8080`)
 - `DATABASE_URL` — database connection string
 - `FRONTEND_URL` — frontend origin for CORS
 - `POSTGRES_PASSWORD` — password for the postgres superuser

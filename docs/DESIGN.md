@@ -19,7 +19,7 @@ The application follows a classic three-tier architecture:
 ┌────────────────┐     ┌────────────────┐     ┌────────────┐
 │  React + TS    │────▶│  Go Backend    │────▶│ PostgreSQL │
 │  (Vite, TW)   │ HTTP│  (ogen router) │ SQL │            │
-│  Port 5173     │◀────│  Port 8080     │◀────│  Port 5432 │
+│  Port 5173     │◀────│  :8080 default │◀────│  Port 5432 │
 └────────────────┘     └────────────────┘     └────────────┘
      Frontend              Backend               Database
 
@@ -78,6 +78,8 @@ internal/
     login_user.go        # POST /auth/login ✓
     logout_user.go       # POST /auth/logout ✓
     get_current_user.go  # GET /auth/me ✓
+  server/
+    server.go            # Run/build/serve entry point ✓
   auth/
     user.go              # User domain model (private fields)
     repository.go        # UserRepository (DB queries) ✓
@@ -406,6 +408,18 @@ Sentinel errors `db.ErrNotFound` and `db.ErrConflict` let
 upper layers translate to HTTP status codes without
 importing pgx.
 
+### Connection Pool
+
+`db.DB` encapsulates database connectivity so that no
+package outside `internal/db` imports pgx directly:
+
+- **`New(ctx)`** — reads `DATABASE_URL` from the
+  environment, connects to the database, and pings to
+  verify connectivity. Returns `*db.DB`.
+- **`DBTX()`** — returns the underlying `DBTX` interface
+  for use by repositories.
+- **`Close()`** — releases all database resources.
+
 ### Transaction Boundaries
 
 - Registration (insert user) runs in a single query — no
@@ -692,6 +706,73 @@ pattern as the service tests. Table-driven tests cover:
 - Logout: cookie cleared (MaxAge=-1)
 - Missing response writer in context returns error
 
+## Server Package Design
+
+### Overview
+
+`internal/server` wires all dependencies together and
+manages the HTTP server lifecycle. It exposes a single
+public function, `Run(ctx context.Context) error`, keeping
+`cmd/server/main.go` minimal (signal handling + call `Run`).
+
+### Architecture
+
+`Run` delegates to two internal helpers:
+
+```
+Run(ctx)
+  │
+  ├─ read env vars: ADDRESS, JWT_SECRET, ENVIRONMENT
+  │
+  ├─ db.New(ctx)
+  │    └─ reads DATABASE_URL, connects, pings
+  │         → *db.DB (caller defers Close)
+  │
+  ├─ build(dbtx, jwtSecret, secure)
+  │    │
+  │    ├─ auth.NewTokenConfig
+  │    ├─ auth.NewUserRepository → auth.NewService
+  │    ├─ auth.NewSecurityHandler
+  │    ├─ pet.NewPetRepository → pet.NewService
+  │    ├─ handler.New
+  │    ├─ api.NewServer
+  │    └─ handler.WrapWithResponseWriter
+  │         → http.Handler
+  │
+  └─ serve(ctx, addr, handler)
+       │
+       ├─ http.Server.ListenAndServe (goroutine)
+       ├─ <-ctx.Done()
+       └─ srv.Shutdown (10s timeout)
+```
+
+### Environment Variables
+
+| Variable      | Required | Default        | Notes                         |
+|---------------|----------|----------------|-------------------------------|
+| `ADDRESS`     | No       | `:8080`        | Listen address (host:port)    |
+| `DATABASE_URL`| Yes      | —              | PostgreSQL connection string  |
+| `JWT_SECRET`  | Yes      | —              | Min 32 bytes                  |
+| `ENVIRONMENT` | No       | `production`   | Set to `development` for insecure cookies |
+
+### Secure Cookie Flag
+
+The `secure` bool passed to `handler.New` controls the
+`Secure` attribute on HTTP cookies. It defaults to `true`
+(production). Setting `ENVIRONMENT=development` sets it to
+`false` for local HTTP development.
+
+### Graceful Shutdown
+
+1. `Run` receives a cancellable context (from
+   `signal.NotifyContext` in main).
+2. `serve` starts `ListenAndServe` in a goroutine and
+   blocks on `<-ctx.Done()`.
+3. On cancellation, `srv.Shutdown` is called with a 10s
+   timeout to drain in-flight requests.
+4. After `serve` returns, `Run` defers `pool.Close()` to
+   close all database connections.
+
 ## Frontend Design
 
 ### Component Hierarchy
@@ -913,7 +994,7 @@ The application follows
 | Backing services | PostgreSQL via DATABASE_URL          |
 | Build/release/run| mise tasks, Vite build              |
 | Processes        | Stateless server                    |
-| Port binding     | PORT env var                        |
+| Port binding     | ADDRESS env var                     |
 | Concurrency      | Go goroutines per request           |
 | Disposability    | Graceful shutdown on SIGTERM        |
 | Dev/prod parity  | Same stack, minimal differences     |

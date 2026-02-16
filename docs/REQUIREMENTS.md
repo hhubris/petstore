@@ -193,6 +193,8 @@ internal/
     login_user.go   # POST /auth/login ✓
     logout_user.go  # POST /auth/logout ✓
     get_current_user.go # GET /auth/me ✓
+  server/
+    server.go       # Run/build/serve, dependency wiring ✓
 migrations/
   000001–000006     # Schema and role setup
 ```
@@ -331,7 +333,7 @@ Items marked ✓ are implemented; others are planned.
 
 | Variable           | Description                    |
 |--------------------|--------------------------------|
-| `PORT`             | Server port (default: 8080)    |
+| `ADDRESS`          | Listen address (default: :8080)|
 | `DATABASE_URL`     | PostgreSQL connection string   |
 | `FRONTEND_URL`     | Frontend origin for CORS       |
 | `POSTGRES_PASSWORD`| postgres superuser password    |
