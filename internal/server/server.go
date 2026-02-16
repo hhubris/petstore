@@ -13,6 +13,7 @@ import (
 	"github.com/hhubris/petstore/internal/auth"
 	"github.com/hhubris/petstore/internal/db"
 	"github.com/hhubris/petstore/internal/handler"
+	"github.com/hhubris/petstore/internal/middleware"
 	"github.com/hhubris/petstore/internal/pet"
 )
 
@@ -89,7 +90,13 @@ func build(
 		)
 	}
 
-	return handler.WrapWithResponseWriter(srv), nil
+	inner := handler.WrapWithResponseWriter(srv)
+	return middleware.Chain(inner,
+		middleware.Recovery(),
+		middleware.CorrelationID(),
+		middleware.Logging(),
+		middleware.Spec(),
+	), nil
 }
 
 // serve starts an HTTP server and blocks until ctx is

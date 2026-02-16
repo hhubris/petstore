@@ -24,12 +24,47 @@ type DB struct {
 	pool *pgxpool.Pool
 }
 
-// New reads DATABASE_URL from the environment, connects to
-// the database, and verifies connectivity with a ping.
+// connString builds a PostgreSQL connection string from
+// individual environment variables.
+func connString() (string, error) {
+	user := os.Getenv("PETSTORE_USER")
+	if user == "" {
+		return "", fmt.Errorf("PETSTORE_USER is required")
+	}
+
+	password := os.Getenv("PETSTORE_PASSWORD")
+	if password == "" {
+		return "", fmt.Errorf("PETSTORE_PASSWORD is required")
+	}
+
+	host := os.Getenv("DB_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+
+	port := os.Getenv("DB_PORT")
+	if port == "" {
+		port = "5432"
+	}
+
+	sslMode := "disable"
+	if os.Getenv("DB_SSL_ENABLE") == "true" {
+		sslMode = "require"
+	}
+
+	return fmt.Sprintf(
+		"postgresql://%s:%s@%s:%s/petstore?sslmode=%s",
+		user, password, host, port, sslMode,
+	), nil
+}
+
+// New connects to the database using connection parameters
+// from environment variables and verifies connectivity with
+// a ping.
 func New(ctx context.Context) (*DB, error) {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
-		return nil, fmt.Errorf("DATABASE_URL is required")
+	url, err := connString()
+	if err != nil {
+		return nil, err
 	}
 
 	pool, err := pgxpool.New(ctx, url)

@@ -91,14 +91,17 @@ operation list and authorization matrix.
 
 ## Environment Variables
 
-| Variable            | Description                      |
-|---------------------|----------------------------------|
-| `PORT`              | Server port (default: 8080)      |
-| `DATABASE_URL`      | PostgreSQL connection string     |
-| `FRONTEND_URL`      | Frontend origin for CORS         |
-| `POSTGRES_PASSWORD` | postgres superuser password      |
-| `PETSTORE_PASSWORD` | petstore app user password       |
-| `JWT_SECRET`        | JWT signing key (min 32 bytes)   |
+| Variable            | Description                          |
+|---------------------|--------------------------------------|
+| `ADDRESS`           | Listen address (default: `:8080`)    |
+| `PETSTORE_USER`     | Database application user (required) |
+| `PETSTORE_PASSWORD` | Database app user password           |
+| `DB_HOST`           | Database host (default: `localhost`) |
+| `DB_PORT`           | Database port (default: `5432`)      |
+| `DB_SSL_ENABLE`     | Set to `true` to require SSL         |
+| `FRONTEND_URL`      | Frontend origin for CORS             |
+| `POSTGRES_PASSWORD` | postgres superuser password          |
+| `JWT_SECRET`        | JWT signing key (min 32 bytes)       |
 
 Secrets are stored in `.config/mise/mise.local.toml`
 (gitignored) using mise's age encryption — never in

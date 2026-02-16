@@ -5,27 +5,43 @@ import (
 	"testing"
 )
 
-func TestNewMissingDatabaseURL(t *testing.T) {
-	t.Setenv("DATABASE_URL", "")
+func TestNewMissingPetstoreUser(t *testing.T) {
+	t.Setenv("PETSTORE_USER", "")
 
 	_, err := New(context.Background())
 	if err == nil {
-		t.Fatal("expected error for missing DATABASE_URL")
+		t.Fatal("expected error for missing PETSTORE_USER")
 	}
-	want := "DATABASE_URL is required"
+	want := "PETSTORE_USER is required"
 	if err.Error() != want {
 		t.Errorf("got %q, want %q", err.Error(), want)
 	}
 }
 
-func TestNewBadDatabaseURL(t *testing.T) {
-	t.Setenv(
-		"DATABASE_URL",
-		"postgres://invalid:5432/nonexistent?connect_timeout=1",
-	)
+func TestNewMissingPetstorePassword(t *testing.T) {
+	t.Setenv("PETSTORE_USER", "petstore")
+	t.Setenv("PETSTORE_PASSWORD", "")
 
 	_, err := New(context.Background())
 	if err == nil {
-		t.Fatal("expected error for bad database URL")
+		t.Fatal(
+			"expected error for missing PETSTORE_PASSWORD",
+		)
+	}
+	want := "PETSTORE_PASSWORD is required"
+	if err.Error() != want {
+		t.Errorf("got %q, want %q", err.Error(), want)
+	}
+}
+
+func TestNewBadConnection(t *testing.T) {
+	t.Setenv("PETSTORE_USER", "petstore")
+	t.Setenv("PETSTORE_PASSWORD", "secret")
+	t.Setenv("DB_HOST", "invalid")
+	t.Setenv("DB_PORT", "5432")
+
+	_, err := New(context.Background())
+	if err == nil {
+		t.Fatal("expected error for bad connection")
 	}
 }

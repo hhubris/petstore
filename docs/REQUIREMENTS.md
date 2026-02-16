@@ -183,6 +183,12 @@ internal/
   pet/
     repository.go   # PetRepository (DB queries) ✓
     service.go      # PetService (CRUD logic) ✓
+  middleware/
+    middleware.go   # Middleware type, Chain helper ✓
+    recovery.go     # Panic recovery, 500 JSON response ✓
+    correlation.go  # X-Correlation-ID (ULID) ✓
+    logging.go      # Request logging (method, path, status) ✓
+    spec.go         # Swagger UI + OpenAPI spec serving ✓
   handler/
     handler.go      # Struct, interfaces, error mapping ✓
     add_pet.go      # POST /pets ✓
@@ -196,7 +202,7 @@ internal/
   server/
     server.go       # Run/build/serve, dependency wiring ✓
 migrations/
-  000001–000006     # Schema and role setup
+  000001–000005     # Schema and privilege setup
 ```
 
 Items marked ✓ are implemented; others are planned.
@@ -313,17 +319,19 @@ Items marked ✓ are implemented; others are planned.
   PostgreSQL driver
 - Table creation and index creation are kept in separate
   migrations
-- Migration order:
-  1. Create `petstore` role (password from env var via
-     session variable)
-  2. Create `pets` table
-  3. Create `pets` indexes (`idx_pets_tag`)
-  4. Create `users` table
-  5. Create `users` indexes (`idx_users_email` unique)
-  6. Grant privileges to `petstore` role
-- A migration runner script (`scripts/migrate.sh`) wraps
-  `golang-migrate` to inject the `petstore_password`
-  session variable required by migration 000001
+- The migration runner script (`scripts/migrate.sh`)
+  handles bootstrapping before running migrations:
+  1. Creates the `petstore` role if it doesn't exist
+  2. Creates the `petstore` database if it doesn't exist
+  These run via `psql` because `CREATE DATABASE` cannot
+  execute inside a transaction (which `golang-migrate`
+  uses)
+- Migration order (run against the `petstore` database):
+  1. Create `pets` table
+  2. Create `pets` indexes (`idx_pets_tag`)
+  3. Create `users` table
+  4. Create `users` indexes (`idx_users_email` unique)
+  5. Grant privileges to `petstore` role
 - The PostgreSQL container uses a named Docker volume
   (`petstore-data`) for data persistence across restarts
 - Migrations run automatically on server startup in dev,
@@ -331,14 +339,17 @@ Items marked ✓ are implemented; others are planned.
 
 ## Environment Variables
 
-| Variable           | Description                    |
-|--------------------|--------------------------------|
-| `ADDRESS`          | Listen address (default: :8080)|
-| `DATABASE_URL`     | PostgreSQL connection string   |
-| `FRONTEND_URL`     | Frontend origin for CORS       |
-| `POSTGRES_PASSWORD`| postgres superuser password    |
-| `PETSTORE_PASSWORD`| petstore app user password     |
-| `JWT_SECRET`       | JWT signing key (min 32 bytes) |
+| Variable           | Description                              |
+|--------------------|------------------------------------------|
+| `ADDRESS`          | Listen address (default: `:8080`)        |
+| `PETSTORE_USER`    | Database application user (required)     |
+| `PETSTORE_PASSWORD`| Database application user password       |
+| `DB_HOST`          | Database host (default: `localhost`)     |
+| `DB_PORT`          | Database port (default: `5432`)          |
+| `DB_SSL_ENABLE`    | Set to `true` to require SSL             |
+| `FRONTEND_URL`     | Frontend origin for CORS                 |
+| `POSTGRES_PASSWORD`| postgres superuser password              |
+| `JWT_SECRET`       | JWT signing key (min 32 bytes)           |
 
 ## Non-Functional Requirements
 

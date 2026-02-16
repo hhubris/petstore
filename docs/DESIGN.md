@@ -66,8 +66,16 @@ internal/
     ogen-server.yml      # ogen config: server-only generation
     ogen-client.yml      # ogen config: client-only generation
     oas_*.go             # ogen-generated server (DO NOT EDIT)
+    spec.go              # Embedded spec (!disable_spec) ✓
+    empty_spec.go        # Nil spec (disable_spec) ✓
   db/
     db.go                # DBTX interface, sentinel errors
+  middleware/
+    middleware.go        # Middleware type, Chain helper ✓
+    recovery.go          # Panic recovery ✓
+    correlation.go       # X-Correlation-ID ✓
+    logging.go           # Request logging ✓
+    spec.go              # Swagger UI + spec serving ✓
   handler/
     handler.go           # Struct, interfaces, error mapping ✓
     add_pet.go           # POST /pets ✓
@@ -97,10 +105,11 @@ internal/
 scripts/
   migrate.sh               # Migration runner (sets session vars)
 migrations/
-  000001_create_pets_table.up.sql
-  000001_create_pets_table.down.sql
-  000002_create_users_table.up.sql
-  000002_create_users_table.down.sql
+  000001_create_pets_table.up.sql    / .down.sql
+  000002_create_pets_indexes.up.sql  / .down.sql
+  000003_create_users_table.up.sql   / .down.sql
+  000004_create_users_indexes.up.sql / .down.sql
+  000005_grant_petstore_privileges.up.sql / .down.sql
 ```
 
 ### ogen Workflow
@@ -146,6 +155,9 @@ packages.
 
 ```
 HTTP request
+  │
+  ▼
+Middleware (recovery, correlation ID, logging, spec)
   │
   ▼
 ogen router + validation (generated)
@@ -331,29 +343,25 @@ administrative tasks.
 - Files live in `migrations/`, numbered sequentially with
   separate up/down files:
   ```
-  000001_create_petstore_role.up.sql / .down.sql
-  000002_create_pets_table.up.sql    / .down.sql
-  000003_create_pets_indexes.up.sql  / .down.sql
-  000004_create_users_table.up.sql   / .down.sql
-  000005_create_users_indexes.up.sql / .down.sql
-  000006_grant_petstore_privileges.up.sql / .down.sql
+  000001_create_pets_table.up.sql    / .down.sql
+  000002_create_pets_indexes.up.sql  / .down.sql
+  000003_create_users_table.up.sql   / .down.sql
+  000004_create_users_indexes.up.sql / .down.sql
+  000005_grant_petstore_privileges.up.sql / .down.sql
   ```
 - Each table creation and its indexes are in separate
   migrations.
-- Migration 000001 creates the `petstore` role using
-  `current_setting('migration.petstore_password')`. The
-  Go migration runner must `SET` this session variable
-  from the `PETSTORE_PASSWORD` env var before running
-  migrations.
+- The `scripts/migrate.sh` wrapper bootstraps the
+  `petstore` role and database via `psql` before running
+  `golang-migrate`. Role and database creation use `psql`
+  because `CREATE DATABASE` cannot run inside a
+  transaction.
+- Migrations run against the `petstore` database (not
+  `postgres`).
 - **Dev:** Migrations run automatically on server startup.
 - **Prod:** Migrations run explicitly via CLI before deploy.
 - Down migrations exist for every up migration to support
   rollback.
-- The `scripts/migrate.sh` wrapper builds a `DATABASE_URL`
-  with the `options` parameter to `SET`
-  `migration.petstore_password` as a session variable, then
-  invokes `migrate up`. It allows `DATABASE_URL` override
-  from the environment.
 
 ### Docker Volume
 
@@ -378,11 +386,14 @@ container:
 
 ### Connection Management
 
-- Connection string comes from `DATABASE_URL` env var.
-- Use `pgxpool.Pool` from `jackc/pgx/v5` for connection
+- The connection string is built from individual
+  environment variables (`PETSTORE_USER`,
+  `PETSTORE_PASSWORD`, `DB_HOST`, `DB_PORT`,
+  `DB_SSL_ENABLE`) by `db.connString()`.
+- Uses `pgxpool.Pool` from `jackc/pgx/v5` for connection
   pooling (native pgx, not `database/sql`).
-- Pool settings are configured via `DATABASE_URL`
-  parameters or `pgxpool.Config` defaults.
+- Pool settings are configured via `pgxpool.Config`
+  defaults.
 
 ### DBTX Interfaces
 
@@ -405,9 +416,11 @@ codes without importing pgx.
 so no package outside `internal/db` ever imports pgx for
 connection management:
 
-- **`New(ctx)`** — reads `DATABASE_URL` from the
-  environment, connects to the database, and pings to
-  verify connectivity. Returns `*db.DB`.
+- **`New(ctx)`** — builds a connection string from
+  individual env vars (`PETSTORE_USER`,
+  `PETSTORE_PASSWORD`, `DB_HOST`, `DB_PORT`,
+  `DB_SSL_ENABLE`), connects to the database, and pings
+  to verify connectivity. Returns `*db.DB`.
 - **`Query`**, **`QueryRow`**, **`Exec`** — delegate to
   the underlying connection pool.
 - **`Close()`** — releases all database resources.
@@ -728,7 +741,7 @@ Run(ctx)
   ├─ read env vars: ADDRESS, JWT_SECRET, ENVIRONMENT
   │
   ├─ db.New(ctx)
-  │    └─ reads DATABASE_URL, connects, pings
+  │    └─ builds conn string from env vars, connects, pings
   │         → *db.DB (caller defers Close)
   │
   ├─ build(database, jwtSecret, secure)
@@ -739,7 +752,9 @@ Run(ctx)
   │    ├─ pet.NewPetRepository → pet.NewService
   │    ├─ handler.New
   │    ├─ api.NewServer
-  │    └─ handler.WrapWithResponseWriter
+  │    ├─ handler.WrapWithResponseWriter
+  │    └─ middleware.Chain (Recovery, CorrelationID,
+  │         Logging, Spec)
   │         → http.Handler
   │
   └─ serve(ctx, addr, handler)
@@ -751,12 +766,16 @@ Run(ctx)
 
 ### Environment Variables
 
-| Variable      | Required | Default        | Notes                         |
-|---------------|----------|----------------|-------------------------------|
-| `ADDRESS`     | No       | `:8080`        | Listen address (host:port)    |
-| `DATABASE_URL`| Yes      | —              | PostgreSQL connection string  |
-| `JWT_SECRET`  | Yes      | —              | Min 32 bytes                  |
-| `ENVIRONMENT` | No       | `production`   | Set to `development` for insecure cookies |
+| Variable        | Required | Default     | Notes                                     |
+|-----------------|----------|-------------|-------------------------------------------|
+| `ADDRESS`       | No       | `:8080`     | Listen address (host:port)                |
+| `PETSTORE_USER` | Yes      | —           | Database application user                 |
+| `PETSTORE_PASSWORD` | Yes  | —           | Database application user password        |
+| `DB_HOST`       | No       | `localhost` | Database host                             |
+| `DB_PORT`       | No       | `5432`      | Database port                             |
+| `DB_SSL_ENABLE` | No       | `false`     | Set to `true` to require SSL              |
+| `JWT_SECRET`    | Yes      | —           | Min 32 bytes                              |
+| `ENVIRONMENT`   | No       | `production`| Set to `development` for insecure cookies |
 
 ### Secure Cookie Flag
 
@@ -775,6 +794,105 @@ The `secure` bool passed to `handler.New` controls the
    timeout to drain in-flight requests.
 4. After `serve` returns, `Run` defers `database.Close()`
    to release all database connections.
+
+## Middleware Stack
+
+### Overview
+
+The server applies a middleware chain around the ogen
+handler to provide cross-cutting concerns. Middleware is
+applied outermost-first:
+
+```
+Recovery → CorrelationID → Logging → Spec → WrapWithResponseWriter(ogen)
+```
+
+### Ordering Rationale
+
+1. **Recovery** is outermost so it catches panics from
+   every layer below, including other middleware.
+2. **CorrelationID** populates the context before Logging
+   reads it, ensuring every log line includes the ID.
+3. **Logging** wraps the response writer to capture the
+   status code, then logs after the request completes.
+4. **Spec** checks the path prefix and serves docs or
+   passes through to the ogen handler.
+
+### `middleware.go` — Type and Chain Helper
+
+```go
+type Middleware func(http.Handler) http.Handler
+
+func Chain(h http.Handler, mws ...Middleware) http.Handler
+```
+
+`Chain` applies middleware in reverse order so the first
+argument is the outermost wrapper.
+
+### `recovery.go` — Panic Recovery
+
+- Uses `defer recover()` around `next.ServeHTTP`.
+- Logs the panic value and stack trace via `slog.Error`.
+- Writes a 500 JSON response matching the ogen Error
+  schema: `{"code":500,"message":"internal server error"}`.
+
+### `correlation.go` — Correlation ID
+
+- Reads the `X-Correlation-ID` request header; if absent,
+  generates a new ULID via `ulid.Make()`.
+- Stores the ID in the request context (unexported key).
+- Sets `X-Correlation-ID` on the response header.
+- Exports `GetCorrelationID(ctx) string` for use by the
+  Logging middleware and application code.
+
+### `logging.go` — Request Logging
+
+- Wraps `http.ResponseWriter` with `responseCapture` to
+  intercept the status code (overrides `WriteHeader` and
+  `Write`).
+- After `next.ServeHTTP` completes, logs: method, path,
+  status, duration, and correlation_id.
+- Uses `slog.Info` for status < 500, `slog.Error` for 5xx.
+
+### `spec.go` — OpenAPI Spec and Swagger UI
+
+- Uses `http.NewServeMux` internally to route:
+  - `GET /docs/openapi.yml` — serves the embedded spec
+    with `Content-Type: application/x-yaml`.
+  - `GET /docs` — serves the Swagger UI from
+    `go-openapi/runtime/middleware.SwaggerUI` (loads JS
+    from unpkg.com CDN).
+  - All other paths pass through to the next handler.
+- The spec is provided by `api.Spec()`, which returns a
+  copy of the embedded YAML. If `api.Spec()` returns nil
+  (see build tags below), the middleware is a no-op
+  passthrough.
+
+### Spec Build Tags
+
+The OpenAPI spec embedding uses build tags so it can be
+excluded from production binaries:
+
+- `internal/api/spec.go` (`//go:build !disable_spec`) —
+  embeds `api.yml` and returns a copy from `api.Spec()`.
+- `internal/api/empty_spec.go` (`//go:build disable_spec`)
+  — `api.Spec()` returns nil.
+
+Default builds include the spec. To exclude it:
+
+```bash
+go build -tags=disable_spec ./cmd/server
+```
+
+When excluded, the Spec middleware becomes a passthrough
+and no Swagger UI or YAML endpoints are served.
+
+### Dependencies
+
+- `github.com/oklog/ulid/v2` — ULID generation for
+  correlation IDs.
+- `github.com/go-openapi/runtime/middleware` — Swagger UI
+  handler.
 
 ## Frontend Design
 
@@ -994,7 +1112,7 @@ The application follows
 | Codebase         | Single repo, git                    |
 | Dependencies     | go.mod, package.json                |
 | Config           | Environment variables               |
-| Backing services | PostgreSQL via DATABASE_URL          |
+| Backing services | PostgreSQL via env vars              |
 | Build/release/run| mise tasks, Vite build              |
 | Processes        | Stateless server                    |
 | Port binding     | ADDRESS env var                     |

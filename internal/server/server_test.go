@@ -8,18 +8,21 @@ import (
 	"time"
 )
 
-func TestRunMissingDatabaseURL(t *testing.T) {
-	t.Setenv("DATABASE_URL", "")
-	t.Setenv("JWT_SECRET", "some-secret-that-is-long-enough-32b")
+func TestRunMissingPetstoreUser(t *testing.T) {
+	t.Setenv("PETSTORE_USER", "")
+	t.Setenv("JWT_SECRET",
+		"some-secret-that-is-long-enough-32b")
 
 	err := Run(context.Background())
 	if err == nil {
-		t.Fatal("expected error for missing DATABASE_URL")
+		t.Fatal("expected error for missing PETSTORE_USER")
 	}
 }
 
 func TestRunMissingJWTSecret(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("PETSTORE_USER", "petstore")
+	t.Setenv("PETSTORE_PASSWORD", "secret")
+	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("JWT_SECRET", "")
 
 	err := Run(context.Background())

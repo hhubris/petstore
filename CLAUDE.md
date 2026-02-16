@@ -72,12 +72,20 @@ A pet store application with a Go backend API and a React frontend.
 
 ## Environment Variables
 - `ADDRESS` — listen address (default: `:8080`)
-- `DATABASE_URL` — database connection string
+- `PETSTORE_USER` — database application user (required)
+- `PETSTORE_PASSWORD` — database application user password
+- `DB_HOST` — database host (default: `localhost`)
+- `DB_PORT` — database port (default: `5432`)
+- `DB_SSL_ENABLE` — set to `true` to require SSL
+  (default: disabled)
 - `FRONTEND_URL` — frontend origin for CORS
 - `POSTGRES_PASSWORD` — password for the postgres superuser
-- `PETSTORE_PASSWORD` — password for the petstore application database user
 - `JWT_SECRET` — JWT signing key (min 32 bytes)
 
 ### Secrets Management
-- Secrets (`POSTGRES_PASSWORD`, `PETSTORE_PASSWORD`, `JWT_SECRET`) are stored in `.config/mise/mise.local.toml` (gitignored) using mise's age encryption — never in plaintext files or version control
+- Secrets (`POSTGRES_PASSWORD`, `PETSTORE_PASSWORD`,
+  `JWT_SECRET`) are stored in
+  `.config/mise/mise.local.toml` (gitignored) using mise's
+  age encryption — never in plaintext files or version
+  control
 - Access secrets via `mise env` at runtime
