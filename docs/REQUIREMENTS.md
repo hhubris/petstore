@@ -15,7 +15,7 @@ following 12-Factor App principles.
 - **Frontend:** React + TypeScript, Vite, Tailwind CSS
 - **Database:** PostgreSQL
 - **Tooling:** mise (task runner, software management,
-  encrypted secrets)
+  secrets via local config)
 
 ## API Specification
 
@@ -83,7 +83,8 @@ code are generated using ogen from this spec.
 - **Library:** `github.com/golang-jwt/jwt/v5`
 - **Claims:** `sub` (user ID), `role`, `exp` (1 hour), `iat`
 - **Signing key:** `JWT_SECRET` env var (min 32 bytes),
-  stored in encrypted mise config
+  stored in `.config/mise/mise.local.toml` (gitignored,
+  age-encrypted)
 - **Delivery:** HttpOnly cookie (`access_token`)
 - **No refresh tokens** — users re-login after 1hr expiry
 
@@ -276,8 +277,9 @@ Items marked ✓ are implemented; others are planned.
   - `petstore` — application user with limited privileges
     (SELECT, INSERT, UPDATE, DELETE on `pets` and `users`
     tables; USAGE on sequences)
-- Passwords stored in encrypted mise config
-  (never in plaintext or version control)
+- Passwords stored in `.config/mise/mise.local.toml`
+  (gitignored, age-encrypted; never in plaintext or
+  version control)
 - Tables:
   - **pets:** `id` (bigserial primary key),
     `name` (text, not null), `tag` (text, nullable,

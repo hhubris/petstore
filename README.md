@@ -14,7 +14,7 @@ PostgreSQL database, following
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS
 - **Database:** PostgreSQL
 - **Tooling:** [mise](https://mise.jdx.dev/) for task
-  running, tool management, and encrypted secrets
+  running, tool management, and secrets
 
 ## Prerequisites
 
@@ -100,7 +100,8 @@ operation list and authorization matrix.
 | `PETSTORE_PASSWORD` | petstore app user password       |
 | `JWT_SECRET`        | JWT signing key (min 32 bytes)   |
 
-Secrets are stored in encrypted mise config — never in
+Secrets are stored in `.config/mise/mise.local.toml`
+(gitignored) using mise's age encryption — never in
 plaintext files or version control.
 
 ## Documentation

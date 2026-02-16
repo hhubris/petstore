@@ -834,9 +834,13 @@ The application follows
 ### Secrets Management
 
 - Secrets (`POSTGRES_PASSWORD`, `PETSTORE_PASSWORD`,
-  `JWT_SECRET`) are stored in encrypted mise config.
+  `JWT_SECRET`) are stored in
+  `.config/mise/mise.local.toml`, which is gitignored.
+  Values use mise's age encryption (`{ age = "..." }`
+  syntax).
 - Never committed in plaintext or stored in `.env` files
-  in version control.
+  in version control. The local config file stays on the
+  developer's machine only.
 - Accessed at runtime via `mise env` which decrypts and
   injects them into the process environment.
 
@@ -914,7 +918,7 @@ The application follows
 | 17 | Dev migration strategy         | Auto-run on startup       | Fast iteration; prod uses explicit CLI                       |
 | 18 | Service layer pattern          | Interface-based           | Enables mock injection for testing                           |
 | 19 | Rate limiting                  | Per-IP on auth endpoints  | Mitigates brute-force without external infrastructure        |
-| 20 | Secrets management             | Encrypted mise config     | Never plaintext in repo; decrypted at runtime                |
+| 20 | Secrets management             | mise.local.toml (gitignored, age-encrypted) | Never in repo; decrypted at runtime by mise          |
 | 21 | Go client generation           | ogen from same spec       | Type-safe client; single source of truth for both sides      |
 | 22 | Client package location        | `/client` (root)          | Importable by external modules; separate from internal code  |
 | 23 | Separate ogen configs          | server.yml + client.yml   | Independent feature sets; server doesn't ship client code    |

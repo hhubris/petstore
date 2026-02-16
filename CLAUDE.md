@@ -79,5 +79,5 @@ A pet store application with a Go backend API and a React frontend.
 - `JWT_SECRET` — JWT signing key (min 32 bytes)
 
 ### Secrets Management
-- Secrets (`POSTGRES_PASSWORD`, `PETSTORE_PASSWORD`, `JWT_SECRET`) are stored in encrypted mise config — never in plaintext files or version control
+- Secrets (`POSTGRES_PASSWORD`, `PETSTORE_PASSWORD`, `JWT_SECRET`) are stored in `.config/mise/mise.local.toml` (gitignored) using mise's age encryption — never in plaintext files or version control
 - Access secrets via `mise env` at runtime
