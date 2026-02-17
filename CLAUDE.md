@@ -19,11 +19,11 @@ A pet store application with a Go backend API and a React frontend.
   /api/         # OpenAPI spec, ogen configs, generated server code
 /frontend/      # React application
   /src/
-    /components/
-    /pages/
-    /hooks/
-    /services/  # API client code
-    /types/
+    /components/ # UI components (shadcn/ui + custom)
+    /pages/      # Page components (one per route)
+    /hooks/      # TanStack Query hooks (usePets, etc.)
+    /services/   # API client layer (fetch wrappers)
+    /types/      # Shared TypeScript types
 ```
 
 ## Build & Run
@@ -49,10 +49,17 @@ A pet store application with a Go backend API and a React frontend.
 
 ### React / TypeScript
 - Functional components only, use hooks
-- State management: React Context + useReducer
+- Auth state: React Context + useReducer
+- Server state (pets): TanStack Query v5
+- Forms: React Hook Form + Zod
+- Toasts: Sonner (call `toast()` directly, no hooks)
+- Components: shadcn/ui for dialogs/dropdowns; hand-write
+  simple components with Tailwind
+- CSS: Tailwind CSS v4 (Vite plugin, `@theme` in CSS,
+  no tailwind.config.js)
 - Use named exports, not default exports
-- CSS approach: Tailwind CSS
-- API calls go through `frontend/src/services/` — components don't call fetch directly
+- API calls go through `frontend/src/services/` consumed
+  by TanStack Query hooks in `frontend/src/hooks/`
 
 ### General
 - No secrets or credentials in code — use environment variables

@@ -12,7 +12,7 @@ following 12-Factor App principles.
   [ogen](https://ogen.dev/) from OpenAPI 3.0 spec
 - **Go Client:** Generated Go HTTP client (ogen) from the
   same OpenAPI spec; CLI entrypoint in `cmd/client/`
-- **Frontend:** React + TypeScript, Vite, Tailwind CSS
+- **Frontend:** React + TypeScript, Vite, Tailwind CSS v4
 - **Database:** PostgreSQL
 - **Tooling:** mise (task runner, software management,
   secrets via local config)
@@ -220,6 +220,20 @@ Items marked ✓ are implemented; others are planned.
 
 ## Frontend Requirements
 
+### Tech Stack
+
+- **Framework:** React 19 + TypeScript
+- **Build:** Vite
+- **CSS:** Tailwind CSS v4 (Vite plugin, no config file)
+- **Routing:** React Router v7 (SPA mode)
+- **Forms:** React Hook Form + Zod (validation + types)
+- **Server state:** TanStack Query v5 (caching, refetching)
+- **Toasts:** Sonner
+- **Components:** shadcn/ui for accessible primitives
+  (dialogs, dropdowns); hand-written for simple components
+- **Accessibility:** eslint-plugin-jsx-a11y, Radix UI
+  primitives, semantic HTML
+
 ### Pages / Views
 
 1. **Login** — Email and password form; redirects to Pet List
@@ -248,21 +262,75 @@ Items marked ✓ are implemented; others are planned.
 
 ### UX Requirements
 
-- Responsive layout (mobile + desktop)
-- Loading and error states for all API calls
-- Feedback on successful create/delete actions
-  (toast or inline message)
-- Admin-only actions are hidden or disabled for
-  customer role
-- Login/register forms show inline validation errors
-  (invalid email, password too short, duplicate email,
-  wrong credentials)
+- Mobile-first responsive layout
+- Loading skeleton placeholders for all data-loading states
+  (not spinners)
+- Error boundaries at root and per-route level
+- Toast notifications (Sonner) for success/error feedback
+  on mutations
+- Admin-only actions (Add Pet, Delete) are hidden for
+  non-admin users (not just disabled)
+- Login/register forms show inline validation errors per
+  field (React Hook Form + Zod)
+- Server errors (duplicate email, bad credentials) shown
+  as form-level error banners
+- Submit buttons show loading state and are disabled
+  during submission
+
+### Empty States
+
+- Pet list with no results: "No pets found" message
+- Pet list with active filters and no results: "No pets
+  match your filters. Try clearing them."
+- Empty pet list for admin users: CTA to add the first pet
+
+### Session Expiry Handling
+
+- The API service layer intercepts 401 responses globally
+- On 401 (outside of login/register), dispatch logout and
+  redirect to `/login`
+- Show a toast: "Session expired. Please log in again."
+- Do not retry auth requests — just redirect
+
+### Form Validation
+
+Forms use React Hook Form with Zod schema resolvers.
+Validation mode is `onBlur`.
+
+| Form     | Fields              | Validation                       |
+|----------|---------------------|----------------------------------|
+| Login    | email, password     | email format; password required  |
+| Register | name, email, password | name required; email format; password 8–72 chars |
+| Add Pet  | name, tag           | name required; tag optional      |
 
 ### State Management
 
-- React Context + useReducer for auth/role state and UI state
-- API calls go through a service layer
-  (`frontend/src/services/`)
+- **Auth state:** React Context + useReducer (user, role,
+  loading). Changes infrequently (login/logout only).
+- **Server state (pets):** TanStack Query v5. Provides
+  caching, background refetching, loading/error states,
+  and cache invalidation after mutations.
+- API calls go through a typed service layer
+  (`frontend/src/services/`), consumed by TanStack Query
+  hooks (`frontend/src/hooks/`)
+
+### Accessibility
+
+- Semantic HTML first (`<nav>`, `<main>`, `<button>`,
+  `<form>`)
+- Focus management on client-side route changes (move
+  focus to page heading or main content)
+- Focus trapping in modal dialogs (Radix UI handles this)
+- `aria-live="polite"` regions for toast notifications
+  (Sonner handles this)
+- `aria-busy="true"` on containers loading data
+- `role="alert"` for form error messages
+- All interactive elements reachable via keyboard (Tab)
+- Escape key closes modals and dropdowns
+- WCAG 2.1 AA contrast ratios (4.5:1 normal text,
+  3:1 large text)
+- `eslint-plugin-jsx-a11y` for lint-time accessibility
+  checks
 
 ## Go Client Requirements
 

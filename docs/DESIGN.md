@@ -896,29 +896,93 @@ and no Swagger UI or YAML endpoints are served.
 
 ## Frontend Design
 
+### Dependencies
+
+| Package | Version | Purpose |
+|---|---|---|
+| `react` | ^19.x | UI framework |
+| `react-router` | ^7.x | Client-side routing (SPA mode) |
+| `react-hook-form` | ^7.x | Form state and validation |
+| `@hookform/resolvers` | ^5.x | Zod integration for RHF |
+| `zod` | ^3.x | Schema validation + TS types |
+| `@tanstack/react-query` | ^5.x | Server state management |
+| `sonner` | ^2.x | Toast notifications |
+| `clsx` | ^2.x | Conditional class merging |
+| `tailwind-merge` | ^3.x | Tailwind-aware class merging |
+| `react-loading-skeleton` | latest | Loading placeholders |
+| `eslint-plugin-jsx-a11y` | latest | Accessibility linting |
+
+shadcn/ui components (copied into project, not installed
+as a dependency): AlertDialog, Button, DropdownMenu,
+Input, Label.
+
+### Tailwind CSS v4
+
+Tailwind v4 uses a Vite plugin instead of PostCSS and has
+no `tailwind.config.js`. Configuration happens via `@theme`
+directives in CSS.
+
+Setup in `vite.config.ts`:
+
+```ts
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [tailwindcss(), react()],
+});
+```
+
+In `index.css`:
+
+```css
+@import "tailwindcss";
+```
+
 ### Component Hierarchy
 
 ```
 App
-├── AuthProvider (Context + useReducer)
-│   ├── NavBar
-│   │   ├── Logo / Home link
-│   │   ├── User name + role (when logged in)
-│   │   └── Login / Register links (when logged out)
-│   ├── Routes
-│   │   ├── /login         → LoginPage
-│   │   ├── /register      → RegisterPage
-│   │   ├── /pets           → PetListPage
-│   │   ├── /pets/:id       → PetDetailPage
-│   │   ├── /pets/new       → AddPetPage (protected, admin)
-│   │   └── *               → NotFoundPage
-│   └── ToastContainer (success/error feedback)
+├── QueryClientProvider (TanStack Query)
+│   └── AuthProvider (Context + useReducer)
+│       ├── NavBar
+│       │   ├── Logo / Home link
+│       │   ├── Nav links (Pets, Add Pet if admin)
+│       │   ├── User dropdown (name, role, logout)
+│       │   └── Login / Register links (logged out)
+│       ├── ErrorBoundary (per-route)
+│       │   └── Routes
+│       │       ├── /login       → LoginPage
+│       │       ├── /register    → RegisterPage
+│       │       ├── /pets        → PetListPage
+│       │       ├── /pets/:id    → PetDetailPage
+│       │       ├── /pets/new    → AddPetPage (protected)
+│       │       └── *            → NotFoundPage
+│       └── Toaster (Sonner)
 ```
+
+### Layout Pattern
+
+```tsx
+<div className="min-h-screen flex flex-col">
+  <NavBar />         {/* sticky top */}
+  <main className="flex-1 container mx-auto px-4 py-6
+                    max-w-7xl">
+    <Outlet />       {/* React Router outlet */}
+  </main>
+  <Toaster />        {/* Sonner toast container */}
+</div>
+```
+
+**Navbar:** Desktop (md+) — horizontal bar with logo left,
+links center, user menu right. Mobile — hamburger icon
+opening a slide-down panel. Toggle via
+`hidden md:flex` / `flex md:hidden`.
 
 ### Routing Structure
 
-React Router handles client-side routing. Routes are split
-into public and protected:
+React Router v7 handles client-side routing in SPA mode.
+Routes are split into public and protected:
 
 | Path           | Component      | Auth     | Role  |
 |----------------|----------------|----------|-------|
@@ -943,14 +1007,56 @@ AuthContext (React Context)
 
 - `AuthProvider` wraps the app and calls `GET /auth/me` on
   mount to restore session from the HttpOnly cookie.
-- Components access auth state via a `useAuth()` hook.
+- While `loading` is true, render a full-page skeleton
+  (prevents flash of login page).
+- Components access auth state via a `useAuth()` hook that
+  returns `{ user, isAdmin, isAuthenticated }`.
 - Login sets user state; logout clears it and calls
   `POST /auth/logout`.
+
+### Server State Management (TanStack Query)
+
+Pet data uses TanStack Query for caching, background
+refetching, and cache invalidation after mutations.
+
+**Query hooks** (`frontend/src/hooks/`):
+
+```
+usePets.ts        # useQuery for pet list
+usePet.ts         # useQuery for single pet
+useAddPet.ts      # useMutation for creating pet
+useDeletePet.ts   # useMutation for deleting pet
+```
+
+**Cache invalidation strategy:**
+
+| Mutation     | Invalidation                             |
+|--------------|------------------------------------------|
+| `addPet`     | Invalidate `["pets"]` (list)             |
+| `deletePet`  | Invalidate `["pets"]` + remove `["pets", id]` |
+| `login`      | Invalidate `["auth", "me"]`              |
+| `logout`     | Clear all queries                        |
+
+**QueryClient defaults:**
+
+```ts
+{
+  queries: {
+    staleTime: 30_000,      // 30s before refetch
+    retry: 2,
+    refetchOnWindowFocus: true,
+  },
+  mutations: {
+    retry: false,            // don't retry mutations
+  },
+}
+```
 
 ### Service Layer Pattern
 
 All API calls go through `frontend/src/services/`. No
-component calls `fetch` directly.
+component calls `fetch` directly. TanStack Query hooks
+consume these service functions as `queryFn` / `mutationFn`.
 
 ```
 frontend/src/services/
@@ -962,8 +1068,47 @@ frontend/src/services/
 The base `api.ts` module:
 - Sets `credentials: 'include'` for cookie handling.
 - Sets `Content-Type: application/json`.
-- Parses error responses into a consistent format.
+- Intercepts 401 responses globally — dispatches logout
+  and fires an `auth:expired` event for the auth provider
+  to redirect to `/login` with a toast.
+- Parses error responses into a typed `ApiError` class.
 - Provides typed wrapper functions for GET, POST, DELETE.
+
+### Form Handling
+
+Forms use React Hook Form with Zod schema resolvers in
+`onBlur` validation mode.
+
+- Inline error messages per field (below the input)
+- Server errors (409, 401) set via
+  `setError("root", { message })` and displayed as a
+  form-level banner
+- Submit buttons disabled with loading text during
+  submission (`isSubmitting` from RHF)
+
+### Error Handling
+
+**Error boundaries:**
+- Root-level boundary catches catastrophic failures
+- Per-route boundaries so one page error does not break
+  the whole app
+- Fallback component with "Something went wrong" message
+  and a "Retry" button
+
+**API errors:**
+- TanStack Query provides `isError` and `refetch()` for
+  inline retry on queries
+- Mutations show error toasts via Sonner
+- The service layer translates HTTP errors into typed
+  `ApiError` objects
+
+### Loading States
+
+- Pet list: 6 skeleton cards in a grid matching the real
+  card layout (`react-loading-skeleton`)
+- Pet detail: single skeleton card
+- Auth check on mount: full-page skeleton
+- Form submission: button shows "Submitting..." text
 
 ### Protected Route Redirect Flow
 
@@ -980,6 +1125,28 @@ User visits /pets/new (protected)
 
 A `ProtectedRoute` wrapper component checks auth state
 and role before rendering the child route.
+
+### Delete Confirmation
+
+Uses a shadcn/ui AlertDialog (Radix UI primitive):
+- Shows pet name: "Delete 'Buddy'? This cannot be undone."
+- Confirm button shows loading state during API call
+- On success: toast + navigate to pet list
+- On error: toast with error message, dialog stays open
+
+### Accessibility Implementation
+
+- Semantic HTML: `<nav>`, `<main>`, `<button>`, `<form>`
+- Focus management: `useEffect` in layout component moves
+  focus to `<main>` on route change
+- Focus trapping: Radix UI Dialog handles this for modals
+- Screen reader: Sonner provides `aria-live` regions for
+  toasts; `aria-busy` on loading containers;
+  `role="alert"` on form errors
+- Keyboard: all controls Tab-reachable; Escape closes
+  modals/dropdowns (Radix)
+- Contrast: WCAG 2.1 AA (4.5:1 normal, 3:1 large)
+- Lint: `eslint-plugin-jsx-a11y` in CI
 
 ## API Design
 
@@ -1165,10 +1332,15 @@ The application follows
 
 - **Component tests:** React Testing Library for
   rendering and user interaction.
+- **Hook tests:** Wrap TanStack Query hooks in a test
+  `QueryClientProvider`; mock service functions.
 - **Service layer tests:** Mock `fetch` to verify correct
   request construction and response parsing.
 - **Auth flow tests:** Verify context updates on login/
-  logout, protected route redirects.
+  logout, protected route redirects, session expiry
+  handling (401 interception).
+- **Accessibility tests:** `eslint-plugin-jsx-a11y` in CI;
+  manual testing with screen reader.
 - **Run:** `mise run ui:test`.
 
 ### Auth-Specific Test Cases
@@ -1200,9 +1372,9 @@ The application follows
 | 8  | Password hashing               | bcrypt, default cost      | Industry standard; 72-byte limit enforced in schema          |
 | 9  | Admin creation                 | Manual / seed script      | No self-service admin promotion                              |
 | 10 | Database migration tool        | golang-migrate            | SQL-based, supports up/down, widely adopted                  |
-| 11 | Frontend state management      | Context + useReducer      | Built-in React; avoids external dependency for simple state  |
-| 12 | CSS framework                  | Tailwind CSS              | Utility-first; consistent with project conventions           |
-| 13 | Frontend routing               | React Router              | De facto standard for React SPAs                             |
+| 11 | Frontend auth state            | Context + useReducer      | Built-in React; sufficient for simple auth/role state        |
+| 12 | CSS framework                  | Tailwind CSS v4           | Utility-first; Vite plugin, no config file                   |
+| 13 | Frontend routing               | React Router v7           | SPA mode; de facto standard for React SPAs                   |
 | 14 | API base path                  | /api/v1/                  | Versioned; separates API from frontend routes                |
 | 15 | Logging                        | slog (std library)        | No external dependency; structured output                    |
 | 16 | DB driver                      | pgx/v5 (native)           | Direct pgx interface; no database/sql overhead               |
@@ -1220,3 +1392,9 @@ The application follows
 | 28 | Sentinel errors in db pkg      | ErrNotFound, ErrConflict  | Decouples upper layers from pgx error types                  |
 | 29 | Auth service repo interface    | Duck-typed Repository     | Pure Go mock in tests; no pgxmock needed at service layer    |
 | 30 | Login error mapping            | ErrInvalidCredentials     | Same error for bad email/password; prevents enumeration      |
+| 31 | Server state management        | TanStack Query v5         | Caching, refetching, invalidation; replaces manual useState  |
+| 32 | Form library                   | React Hook Form + Zod     | Dominant pairing; Zod doubles as TS types + runtime validation |
+| 33 | Toast notifications            | Sonner                    | Lightweight (~5KB); no provider needed; shadcn/ui default    |
+| 34 | Component primitives           | shadcn/ui (Radix)         | Accessible primitives; copied not installed; full ownership  |
+| 35 | Loading states                 | react-loading-skeleton    | Skeleton cards match layout; better UX than spinners         |
+| 36 | Accessibility linting          | eslint-plugin-jsx-a11y    | Catches common a11y issues at lint time                      |
